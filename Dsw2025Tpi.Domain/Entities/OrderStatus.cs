@@ -6,7 +6,13 @@ using System.Threading.Tasks;
 
 namespace Dsw2025Tpi.Domain.Entities
 {
-    internal class OrderStatus
+    public enum OrderStatus
     {
+        PENDING = 1,
+        PROCESSING = 2,
+        SHIPPED = 3,
+        DELIVERED = 4,
+        CANCELLED = 5
+
     }
 }

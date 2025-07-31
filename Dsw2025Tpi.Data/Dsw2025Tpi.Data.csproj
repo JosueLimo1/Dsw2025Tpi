@@ -17,6 +17,8 @@
   <ItemGroup>
     <Folder Include="Helpers\" />
     <Folder Include="Migrations\Authenticate\" />
+    <Folder Include="Helpers\" />
+    <Folder Include="Sources\" />
     <Folder Include="Sources\" />
   </ItemGroup>
 

@@ -6,7 +6,5 @@ using System.Threading.Tasks;
 
 namespace Dsw2025Tpi.Application.Dtos
 {
-    internal class LoginModel
-    {
-    }
+    public record LoginModel(string Username, string Password);
 }

@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 
 namespace Dsw2025Tpi.Application.Dtos
 {
-    internal class OrderItemModel
+    public record OrderItemModel
     {
+        public record RequestOrderItemModel(int quantity, Guid ProductId);
+        public record ResponseOrderItemModel(Guid Id, int quantity, decimal unitPrice, Guid OrderId, Guid ProductId);
     }
 }
