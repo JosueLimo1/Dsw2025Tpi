@@ -9,14 +9,15 @@ namespace Dsw2025Tpi.Domain.Entities
 {
     public class Product : EntityBase
     {
-        public string sku { get; set; }
-        public string internalCode { get; set; }
-        public string name { get; set; }
-        public string description { get; set; }
+  
+
+        public string Sku { get; set; }
+        public string InternalCode { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
 
         private decimal _currentUnitPrice;
-
-        public decimal currentUnitPrice
+        public decimal CurrentUnitPrice
         {
             get => _currentUnitPrice;
             set
@@ -27,7 +28,7 @@ namespace Dsw2025Tpi.Domain.Entities
             }
         }
         private int _stockQuantity;
-        public int stockQuantity
+        public int StockQuantity
         {
             get => _stockQuantity;
             set
@@ -38,26 +39,23 @@ namespace Dsw2025Tpi.Domain.Entities
             }
         }
 
-        public Product(string sku, string internalCode, string name, string description, decimal currentUnitPrice, int stockQuantity, bool isActive)
-        {
-            this.sku = sku;
-            this.internalCode = internalCode;
-            this.name = name;
-            this.description = description;
-            this.currentUnitPrice = currentUnitPrice;
-            this.stockQuantity = stockQuantity;
-            this.isActive = isActive;
-        }
-
-
-        public bool isActive { get; set; }
-        public ICollection<OrderItem>? items { get; set; }
+        public bool IsActive { get; set; }
+        public ICollection<OrderItem>? Items { get; set; }
 
         public void Toggle()
         {
-            isActive = !isActive;
+            IsActive = !IsActive;
         }
-
+        public Product(string sku, string internalCode, string name, string description, decimal currentUnitPrice, int stockQuantity, bool isActive)
+        {
+            Sku = sku;
+            InternalCode = internalCode;
+            Name = name;
+            Description = description;
+            CurrentUnitPrice = currentUnitPrice;
+            StockQuantity = stockQuantity;
+            IsActive = isActive;
+        }
 
     }
 }

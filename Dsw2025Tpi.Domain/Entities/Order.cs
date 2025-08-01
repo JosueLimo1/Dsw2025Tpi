@@ -23,6 +23,17 @@ namespace Dsw2025Tpi.Domain.Entities
             Status = newStatus;
         }
 
+        public Order(DateTime date, string? shippingAddress, string? billingAddress, string? notes, Guid customerId)
+        {
+            CustomerId = customerId;
+            Date = date;
+            ShippingAddress = shippingAddress;
+            BillingAddress = billingAddress;
+            Notes = notes;
+            Status = OrderStatus.PENDING;
+            OrderItems = [];
+        }
+
         //Copilot hizo el codigo para comprobar y restar cuando se solicite la cantidad de un producto del stock del mismo
         public OrderItem AddItem(Product product, int quantity)
         {

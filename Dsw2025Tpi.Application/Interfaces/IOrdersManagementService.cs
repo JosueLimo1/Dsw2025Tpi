@@ -16,5 +16,6 @@ namespace Dsw2025Tpi.Application.Interfaces
         Task<OrderModel.ResponseOrderModel> AddOrder(OrderModel.RequestOrderModel request);
 
         Task<OrderModel.ResponseOrderModel> PutOrder(Guid id, OrderModel.RequestOrderModel request);
+
     }
 }
