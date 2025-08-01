@@ -43,16 +43,16 @@ namespace Dsw2025Tpi.Domain.Entities
             if (quantity <= 0)
                 throw new ArgumentException("La cantidad debe ser mayor a cero.", nameof(quantity));
 
-            if (!product.isActive)
+            if (!product.IsActive)
                 throw new InvalidOperationException("El producto no está activo.");
 
-            if (product.stockQuantity < quantity)
+            if (product.StockQuantity < quantity)
                 throw new InvalidOperationException("No hay stock suficiente para este producto.");
 
             // Descontar stock
-            product.stockQuantity -= quantity;
+            product.StockQuantity -= quantity;
 
-            var item = new OrderItem(quantity, product.currentUnitPrice, this.Id, product.Id);
+            var item = new OrderItem(quantity, product.CurrentUnitPrice, this.Id, product.Id);
             OrderItems.Add(item);
 
             return item;
