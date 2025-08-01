@@ -1,5 +1,11 @@
+using Microsoft.EntityFrameworkCore;
+using Dsw2025Tpi.Data;
+using Dsw2025Tpi.Data.Helpers;
+using Microsoft.EntityFrameworkCore;
+using Dsw2025Tpi.Data; // Este debe coincidir con el namespace donde están tus contextos
 
 namespace Dsw2025Tpi.Api;
+
 
 public class Program
 {
@@ -15,7 +21,20 @@ public class Program
         builder.Services.AddSwaggerGen();
         builder.Services.AddHealthChecks();
 
+        builder.Services.AddDbContext<Dsw2025TpiContext>(options =>
+            options.UseSqlServer(builder.Configuration.GetConnectionString("MainDb")));
+
+        builder.Services.AddDbContext<AuthenticateContext>(options =>
+            options.UseSqlServer(builder.Configuration.GetConnectionString("AuthDb")));
+
         var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Dsw2025TpiContext>();
+            db.SeedDatabase(); // ? importante
+        }
+
 
         // Configure the HTTP request pipeline.
         if (app.Environment.IsDevelopment())
@@ -34,4 +53,5 @@ public class Program
 
         app.Run();
     }
+
 }

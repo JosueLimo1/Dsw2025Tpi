@@ -1,0 +1,27 @@
+[
+  {
+    "Id": "3e1d7a46-6b3b-4d17-a5f2-5adf6d13c3b1",
+    "Email": "carlos@gmail.com",
+    "Name": "Carlos Lix Klett",
+    "PhoneNumber": "1111"
+  },
+  {
+    "Id": "5f1c8b4d-2e1a-4b12-9876-11ab12c7f888",
+    "Email": "victor@gmail.com",
+    "Name": "Victor Libran",
+    "PhoneNumber": "2222"
+  },
+  {
+    "Id": "8ee65b9a-6746-4401-a885-09a9f7c67ed3",
+    "Email": "josue@gmail.com",
+    "Name": "Josue Limo",
+    "PhoneNumber": "3333"
+  },
+  {
+    "Id": "8ee65b9a-6746-4401-a885-09a9f7c67ed4",
+    "Email": "Ignacio@gmail.com",
+    "Name": "Ignacio Hillen",
+    "PhoneNumber": "4444"
+  }
+
+]

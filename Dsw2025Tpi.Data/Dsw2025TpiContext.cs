@@ -82,5 +82,3 @@ public class Dsw2025TpiContext : DbContext
         });
     }
 }
-
-g
