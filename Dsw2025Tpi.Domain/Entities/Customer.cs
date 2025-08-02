@@ -20,6 +20,6 @@ namespace Dsw2025Tpi.Domain.Entities
 
         }
 
-        public ICollection<Order>? Orders { get; set; }
+        //public ICollection<Order>? Orders { get; set; }
     }
 }

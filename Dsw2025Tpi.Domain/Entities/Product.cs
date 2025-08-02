@@ -40,7 +40,7 @@ namespace Dsw2025Tpi.Domain.Entities
         }
 
         public bool IsActive { get; set; }
-        public ICollection<OrderItem>? Items { get; set; }
+       // public ICollection<OrderItem>? Items { get; set; }
 
         public void Toggle()
         {
