@@ -151,5 +151,9 @@ public class OrdersManagementService : IOrdersManagementService
             order.Status
         );
     }
+    public async Task<bool> CustomerExists(Guid customerId)
+    {
+        return await _context.Customers.AnyAsync(c => c.Id == customerId);
+    }
 }
 

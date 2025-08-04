@@ -67,8 +67,22 @@ public class Program
         builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
         builder.Services.AddScoped<IOrdersManagementService, OrdersManagementService>();
 
+        // Configuración de CORS para permitir todas las solicitudes
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("AllowAll", policy =>
+            {
+                policy.AllowAnyOrigin()
+                      .AllowAnyHeader()
+                      .AllowAnyMethod();
+            });
+        });
+      
 
         var app = builder.Build();
+
+        app.UseCors("AllowAll");
+
 
         // Sembrado inicial de la base de datos (carga de Customers desde JSON, por ejemplo)
         using (var scope = app.Services.CreateScope())

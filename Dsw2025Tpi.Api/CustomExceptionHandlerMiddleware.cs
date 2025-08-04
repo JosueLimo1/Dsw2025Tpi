@@ -58,6 +58,7 @@ namespace Dsw2025Tpi.Api.Middleware
                     message = exception.Message;
                     break;
 
+
                 default:
                     // Para otros errores no específicos, mostramos el mensaje original
                     message = exception.Message;

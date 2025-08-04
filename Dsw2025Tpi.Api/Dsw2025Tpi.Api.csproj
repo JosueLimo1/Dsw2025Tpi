@@ -20,4 +20,8 @@
     <ProjectReference Include="..\Dsw2025Tpi.Application\Dsw2025Tpi.Application.csproj" />
   </ItemGroup>
 
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Exec Command="taskkill /f /im Dsw2025Tpi.Api.exe &gt;nul 2&gt;&amp;1 || exit 0&#xD;&#xA;&#xD;&#xA;" />
+  </Target>
+
 </Project>
