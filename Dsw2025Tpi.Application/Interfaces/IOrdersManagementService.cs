@@ -1,21 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Dsw2025Tpi.Application.Dtos;
+﻿using Dsw2025Tpi.Application.Dtos;
+using Dsw2025Tpi.Domain.Entities;
 
 namespace Dsw2025Tpi.Application.Interfaces
 {
     public interface IOrdersManagementService
     {
-        Task<OrderModel.ResponseOrderModel> GetOrderById(Guid id);
+        // Obtener una orden por ID
+        Task<OrderModel.ResponseOrderModel?> GetOrderById(Guid id);
 
-        Task<IEnumerable<OrderModel.ResponseOrderModel>?> GetAllOrders();
+        // Obtener todas las órdenes con filtros opcionales
+        Task<IEnumerable<OrderModel.ResponseOrderModel>> GetAllOrders(OrderFilterModel? filter = null);
 
-        Task<OrderModel.ResponseOrderModel> AddOrder(OrderModel.RequestOrderModel request);
+        // Crear una nueva orden
+        Task<OrderModel.ResponseOrderModel> CreateOrder(OrderModel.RequestOrderModel request);
 
-        Task<OrderModel.ResponseOrderModel> PutOrder(Guid id, OrderModel.RequestOrderModel request);
-
+        // Cambiar el estado de una orden (PUT /api/orders/{id}/status)
+        Task<OrderModel.ResponseOrderModel?> UpdateOrderStatus(Guid id, OrderStatus newStatus);
     }
 }
+

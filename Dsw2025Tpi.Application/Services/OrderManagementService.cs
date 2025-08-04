@@ -1,189 +1,155 @@
-﻿using Azure.Core;
-using Dsw2025Tpi.Application.Dtos;
-using Dsw2025Tpi.Application.Exceptions;
+﻿using Dsw2025Tpi.Application.Dtos;
 using Dsw2025Tpi.Application.Interfaces;
-using Dsw2025Tpi.Application.Validation;
-using Dsw2025Tpi.Data.Repositories;
+using Dsw2025Tpi.Data;
 using Dsw2025Tpi.Domain.Entities;
-using Dsw2025Tpi.Domain.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
-namespace Dsw2025Tpi.Application.Services
+namespace Dsw2025Tpi.Application.Services;
+
+public class OrdersManagementService : IOrdersManagementService
 {
-    public class OrdersManagementService : IOrdersManagementService
+    private readonly Dsw2025TpiContext _context;
+
+    public OrdersManagementService(Dsw2025TpiContext context)
     {
-        // Campo privado solo de lectura que almacena la referencia al repositorio inyectado
-        private readonly IRepository _repository;
+        _context = context;
+    }
 
-        // Constructor que recibe el repositorio por inyección de dependencias
-        public OrdersManagementService(IRepository repository)
+    /// <summary>
+    /// Crea una nueva orden con sus ítems, validando el stock de cada producto.
+    /// Si hay stock suficiente, se descuenta automáticamente.
+    /// </summary>
+    public async Task<OrderModel.ResponseOrderModel> CreateOrder(OrderModel.RequestOrderModel request)
+    {
+        // 1. Validar que el cliente exista
+        var customer = await _context.Customers.FindAsync(request.CustomerId);
+        if (customer is null)
+            throw new ArgumentException("Cliente no encontrado");
+
+        // 2. Crear la orden base con sus datos (sin ítems aún)
+        var order = new Order(
+            request.Date,
+            request.ShippingAddress,
+            request.BillingAddress,
+            request.Notes,
+            request.CustomerId)
         {
-            _repository = repository;
+            Id = Guid.NewGuid() // el ID lo generamos nosotros (como pide el TPI)
+        };
+
+        // 3. Procesar cada ítem incluido en la orden
+        foreach (var item in request.Items)
+        {
+            // 3.1 Validar que el producto exista
+            var product = await _context.Products.FindAsync(item.ProductId);
+            if (product is null)
+                throw new ArgumentException($"Producto con ID {item.ProductId} no encontrado");
+
+            // 3.2 Agregar el ítem a la orden (valida stock, cantidad > 0 y si el producto está activo)
+            // También descuenta el stock del producto si todo es válido
+            order.AddItem(product, item.Quantity);
         }
 
-        // Método asincrónico que devuelve una orden por su ID
-        public async Task<OrderModel.ResponseOrderModel?> GetOrderById(Guid id)
+        // 4. Guardar la orden y sus ítems en la base de datos
+        _context.Orders.Add(order);
+        await _context.SaveChangesAsync();
+
+        // 5. Retornar un DTO con la información básica de la orden creada
+        return new OrderModel.ResponseOrderModel(
+            order.Id,
+            order.Date,
+            order.ShippingAddress,
+            order.BillingAddress,
+            order.Notes,
+            order.CustomerId,
+            order.Status
+        );
+    }
+
+    /// <summary>
+    /// Devuelve todas las órdenes registradas, con filtros opcionales por estado y cliente.
+    /// </summary>
+    public async Task<IEnumerable<OrderModel.ResponseOrderModel>> GetAllOrders(OrderFilterModel? filter = null)
+    {
+        // 1. Construir el query base sobre la tabla Orders
+        var query = _context.Orders.AsQueryable();
+
+        // 2. Aplicar filtros si fueron enviados
+        if (filter is not null)
         {
-            // Busca la orden en el repositorio incluyendo las propiedades de navegación: OrderItems y Product
-            var order = await _repository.GetById<Order>(id, nameof(Order.OrderItems), "OrderItems.Product");
+            if (filter.CustomerId.HasValue)
+                query = query.Where(o => o.CustomerId == filter.CustomerId.Value);
 
-            // Si no existe la orden, lanza una excepción
-            if (order == null) throw new InvalidOperationException($"Orden no encontrada");
-
-            // Si existe, la mapea a un modelo de respuesta y la retorna
-            return new OrderModel.ResponseOrderModel(
-                order.Id,
-                order.Date,
-                order.ShippingAddress,
-                order.BillingAddress,
-                order.Notes,
-                order.CustomerId,
-                order.Status
-            );
+            if (filter.Status.HasValue)
+                query = query.Where(o => o.Status == filter.Status.Value);
         }
 
-        // Método asincrónico que devuelve todas las órdenes en el sistema
-        public async Task<IEnumerable<OrderModel.ResponseOrderModel>?> GetAllOrders()
-        {
-            // Obtiene todas las órdenes del repositorio
-            var orders = await _repository.GetAll<Order>();
+        // 3. Ejecutar la consulta a la base de datos
+        var orders = await query.ToListAsync();
 
-            // Mapea cada orden al modelo de respuesta y devuelve el listado
-            return orders?.Select(o => new OrderModel.ResponseOrderModel(
-                o.Id,
-                o.Date,
-                o.ShippingAddress,
-                o.BillingAddress,
-                o.Notes,
-                o.CustomerId,
-                o.Status
-            ));
-        }
+        // 4. Mapear cada orden a su DTO de respuesta
+        return orders.Select(o => new OrderModel.ResponseOrderModel(
+            o.Id,
+            o.Date,
+            o.ShippingAddress,
+            o.BillingAddress,
+            o.Notes,
+            o.CustomerId,
+            o.Status
+        ));
+    }
 
-        // Método asincrónico para agregar una nueva orden al sistema
-        public async Task<OrderModel.ResponseOrderModel> AddOrder(OrderModel.RequestOrderModel request)
-        {
-            // Valida la orden usando un validador estático
-            OrderValidator.Validate(request);
+    /// <summary>
+    /// Devuelve una orden específica, incluyendo sus ítems y productos asociados.
+    /// </summary>
+    public async Task<OrderModel.ResponseOrderModel?> GetOrderById(Guid id)
+    {
+        // 1. Trae la orden e incluye los ítems y los productos de cada ítem
+        var order = await _context.Orders
+            .Include(o => o.OrderItems)
+            .ThenInclude(oi => oi.Product)
+            .FirstOrDefaultAsync(o => o.Id == id);
 
-            // Verifica que la orden contenga al menos un ítem
-            if (request.Items == null || !request.Items.Any())
-                throw new ArgumentException("La orden debe tener al menos un item.");
+        // 2. Si no existe, retorna null
+        if (order is null) return null;
 
-            // Crea una instancia de la entidad Order sin los ítems
-            var order = new Order(
-                request.Date,
-                request.ShippingAddress,
-                request.BillingAddress,
-                request.Notes,
-                request.CustomerId
-            );
+        // 3. Mapear a DTO de respuesta
+        return new OrderModel.ResponseOrderModel(
+            order.Id,
+            order.Date,
+            order.ShippingAddress,
+            order.BillingAddress,
+            order.Notes,
+            order.CustomerId,
+            order.Status
+        );
+    }
 
-            // Guarda la orden para obtener su ID (si es necesario)
-            await _repository.Add(order);
+    /// <summary>
+    /// Cambia el estado de una orden existente (ej: de Pendiente a Enviado).
+    /// </summary>
+    public async Task<OrderModel.ResponseOrderModel?> UpdateOrderStatus(Guid id, OrderStatus newStatus)
+    {
+        // 1. Buscar la orden por ID
+        var order = await _context.Orders.FindAsync(id);
+        if (order is null) return null;
 
-            // Lista para almacenar los ítems que se van a asociar a la orden
-            var orderItems = new List<OrderItem>();
-            decimal totalAmount = 0;
+        // 2. Cambiar el estado de la orden
+        order.ChangeStatus(newStatus);
 
-            // Itera por cada ítem enviado en el request
-            foreach (var item in request.Items)
-            {
-                // Busca el producto correspondiente en la base de datos
-                var product = await _repository.GetById<Product>(item.ProductId)
-                    ?? throw new InvalidOperationException($"Producto no encontrado: {item.ProductId}");
+        // 3. Guardar cambios
+        await _context.SaveChangesAsync();
 
-                // Verifica si hay suficiente stock
-                if (product.StockQuantity < item.Quantity)
-                    throw new InvalidOperationException($"Stock insuficiente para el producto: {product.Name}");
-
-                // Descuenta del stock la cantidad solicitada
-                product.StockQuantity -= item.Quantity;
-
-                // Actualiza el producto en la base de datos
-                await _repository.Update(product);
-
-                // Crea un nuevo OrderItem con la información correspondiente
-                var orderItem = new OrderItem(
-                    item.Quantity,
-                    product.CurrentUnitPrice,
-                    order.Id,       // ID de la orden ya guardada
-                    product.Id      // ID del producto
-                );
-
-                // Agrega el ítem a la lista
-                orderItems.Add(orderItem);
-
-                // Suma al total el monto correspondiente al producto
-                totalAmount += product.CurrentUnitPrice * item.Quantity;
-            }
-
-            // Asigna los ítems a la orden
-            order.OrderItems = orderItems;
-
-            // Actualiza la orden en la base de datos con los ítems agregados
-            await _repository.Update(order);
-
-            // Crea una lista de modelos de respuesta para los ítems (opcional si se quiere devolver en respuesta completa)
-            var responseItems = orderItems.Select(oi => new OrderItemModel.ResponseOrderItemModel(
-                oi.Id,
-                oi.Quantity,
-                oi.UnitPrice,
-                oi.OrderId,
-                oi.ProductId
-            )).ToList();
-
-            // Retorna la orden completa como modelo de respuesta
-            return new OrderModel.ResponseOrderModel(
-                order.Id,
-                order.Date,
-                order.ShippingAddress,
-                order.BillingAddress,
-                order.Notes,
-                order.CustomerId,
-                order.Status
-            );
-        }
-
-        // Método asincrónico para actualizar el estado de una orden existente
-        public async Task<OrderModel.ResponseOrderModel> PutOrder(Guid id, OrderModel.RequestOrderModel request)
-        {
-            // Valida el contenido del request
-            OrderValidator.Validate(request);
-
-            // Verifica que el estado enviado sea válido dentro del enum OrderStatus
-            if (!Enum.IsDefined(typeof(OrderStatus), request.Status))
-            {
-                throw new ArgumentOutOfRangeException("El estado ingresado no es válido.");
-            }
-
-            // Busca la orden por ID
-            var exist = await _repository.GetById<Order>(id);
-
-            // Si no existe, lanza excepción
-            if (exist == null)
-                throw new KeyNotFoundException($"No se encontró la orden con ID: {id}");
-
-            // Actualiza el estado de la orden
-            exist.Status = request.Status;
-
-            // Guarda los cambios
-            await _repository.Update(exist);
-
-            // Devuelve la orden actualizada como modelo de respuesta
-            return new OrderModel.ResponseOrderModel(
-                exist.Id,
-                exist.Date,
-                exist.ShippingAddress,
-                exist.BillingAddress,
-                exist.Notes,
-                exist.CustomerId,
-                exist.Status
-            );
-        }
+        // 4. Retornar la orden actualizada
+        return new OrderModel.ResponseOrderModel(
+            order.Id,
+            order.Date,
+            order.ShippingAddress,
+            order.BillingAddress,
+            order.Notes,
+            order.CustomerId,
+            order.Status
+        );
     }
 }
+

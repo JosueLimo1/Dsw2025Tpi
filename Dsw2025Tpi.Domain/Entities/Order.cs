@@ -18,11 +18,6 @@ namespace Dsw2025Tpi.Domain.Entities
         public Customer? Customer { get; set; }
         public ICollection<OrderItem> OrderItems { get; set; }
 
-        public void ChangeStatus(OrderStatus newStatus)
-        {
-            Status = newStatus;
-        }
-
         public Order(DateTime date, string? shippingAddress, string? billingAddress, string? notes, Guid customerId)
         {
             CustomerId = customerId;
@@ -34,22 +29,17 @@ namespace Dsw2025Tpi.Domain.Entities
             OrderItems = [];
         }
 
-        //Copilot hizo el codigo para comprobar y restar cuando se solicite la cantidad de un producto del stock del mismo
+        public void ChangeStatus(OrderStatus newStatus)
+        {
+            Status = newStatus;
+        }
+
         public OrderItem AddItem(Product product, int quantity)
         {
-            if (product == null)
-                throw new ArgumentNullException(nameof(product));
+            ValidateProduct(product);
+            ValidateQuantity(quantity);
+            EnsureStockAvailability(product, quantity);
 
-            if (quantity <= 0)
-                throw new ArgumentException("La cantidad debe ser mayor a cero.", nameof(quantity));
-
-            if (!product.IsActive)
-                throw new InvalidOperationException("El producto no está activo.");
-
-            if (product.StockQuantity < quantity)
-                throw new InvalidOperationException("No hay stock suficiente para este producto.");
-
-            // Descontar stock
             product.StockQuantity -= quantity;
 
             var item = new OrderItem(quantity, product.CurrentUnitPrice, this.Id, product.Id);
@@ -58,7 +48,28 @@ namespace Dsw2025Tpi.Domain.Entities
             return item;
         }
 
+        // Validación: producto no nulo y activo
+        private void ValidateProduct(Product product)
+        {
+            if (product == null)
+                throw new ArgumentNullException(nameof(product));
 
+            if (!product.IsActive)
+                throw new InvalidOperationException("El producto no está activo.");
+        }
 
+        // Validación: cantidad positiva
+        private void ValidateQuantity(int quantity)
+        {
+            if (quantity <= 0)
+                throw new ArgumentException("La cantidad debe ser mayor a cero.", nameof(quantity));
+        }
+
+        // Validación: hay stock suficiente
+        private void EnsureStockAvailability(Product product, int quantity)
+        {
+            if (product.StockQuantity < quantity)
+                throw new InvalidOperationException("No hay stock suficiente para este producto.");
+        }
     }
 }

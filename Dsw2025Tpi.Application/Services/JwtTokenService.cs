@@ -1,64 +1,56 @@
-﻿using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
-using System;
-using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.Tasks;
+using Dsw2025Tpi.Application.Dtos;
+using Dsw2025Tpi.Domain.Entities;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using Dsw2025Tpi.Application.Interfaces;
 
 namespace Dsw2025Tpi.Application.Services
 {
-    public class JwtTokenService
-    {
-        // Campo privado para acceder a la configuración del sistema (appsettings.json)
-        private readonly IConfiguration _config;
 
-        // Constructor que recibe la configuración por inyección de dependencias
-        public JwtTokenService(IConfiguration config)
+    public class JwtTokenService : IJwtTokenService
+    {
+        private readonly IConfiguration _configuration;
+
+        public JwtTokenService(IConfiguration configuration)
         {
-            _config = config;
+            _configuration = configuration;
         }
 
-        // Método que genera un token JWT a partir del nombre de usuario
-        public string GenerateToken(string username)
+        public string GenerateToken(Customer customer)
         {
-            // Obtiene la sección "Jwt" del archivo de configuración
-            var jwtConfig = _config.GetSection("Jwt");
+            // 1. Obtener los valores del appsettings.json
+            var key = _configuration["Jwt:Key"];
+            var issuer = _configuration["Jwt:Issuer"];
+            var audience = _configuration["Jwt:Audience"];
 
-            // Extrae la clave secreta desde la configuración. Si no existe, lanza una excepción
-            var keyText = jwtConfig["Key"] ?? throw new ArgumentNullException("Jwt Key");
+            if (string.IsNullOrEmpty(key)) throw new InvalidOperationException("Falta clave JWT");
 
-            // Convierte la clave secreta en una clave simétrica que usará el token
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyText));
-
-            // Define las credenciales de firma usando el algoritmo HMAC SHA256
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            // Define los "claims", es decir, los datos que viajarán dentro del token
+            // 2. Crear los claims (pueden expandirse si agregás roles u otros datos)
             var claims = new[]
             {
-            // Claim estándar que representa el sujeto del token (el usuario)
-            new Claim(JwtRegisteredClaimNames.Sub, username),
+                new Claim(JwtRegisteredClaimNames.Sub, customer.Email ?? "noemail"),
+                new Claim("name", customer.Name ?? "Anonimo"),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
 
-            // Claim estándar que representa un identificador único para el token (útil para revocarlo)
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            // 3. Crear clave de seguridad
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+            var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-            // Acá podrías agregar más claims, como el rol del usuario (ej: new Claim("role", role))
-        };
-
-            // Crea el token JWT con todos los datos: emisor, audiencia, claims, tiempo de expiración y firma
-            var token = new JwtSecurityToken(
-                issuer: jwtConfig["Issuer"], // Quién emite el token (por ejemplo, tu API)
-                audience: jwtConfig["Audience"], // Quién consume el token (por ejemplo, el frontend)
-                claims: claims, // Los datos que viajan dentro del token
-                expires: DateTime.Now.AddMinutes(double.Parse(jwtConfig["ExpireInMinutes"] ?? "60")), // Tiempo de validez
-                signingCredentials: creds // Firma digital que garantiza que el token no fue modificado
+            // 4. Crear el token
+            var tokenDescriptor = new JwtSecurityToken(
+                issuer: issuer,
+                audience: audience,
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(1), // puedes parametrizarlo
+                signingCredentials: credentials
             );
 
-            // Convierte el token en un string (formato JWT) para enviarlo al cliente
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            return new JwtSecurityTokenHandler().WriteToken(tokenDescriptor);
         }
     }
 }
+

@@ -1,4 +1,5 @@
 ﻿using Dsw2025Tpi.Application.Dtos;
+using Dsw2025Tpi.Domain.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,19 +10,19 @@ namespace Dsw2025Tpi.Application.Validation
 {
     public static class CustomerValidator
     {
-        public static void Validate(CustomerModel.RequestCustomer request)
+        public static void Validate(Customer? customer)
         {
-            if (request == null)
-                throw new InvalidOperationException("El cliente no puede ser nulo.");
+            if (customer == null)
+                throw new ArgumentException("Cliente no encontrado.");
 
-            if (string.IsNullOrWhiteSpace(request.Name))
-                throw new InvalidOperationException("El nombre es obligatorio.");
+            if (string.IsNullOrWhiteSpace(customer.Name))
+                throw new ArgumentException("El nombre del cliente no puede estar vacío.");
 
-            if (string.IsNullOrWhiteSpace(request.Email))
-                throw new InvalidOperationException("El email es obligatorio.");
+            if (string.IsNullOrWhiteSpace(customer.Email))
+                throw new ArgumentException("El email del cliente no puede estar vacío.");
 
-            if (string.IsNullOrWhiteSpace(request.PhoneNumber))
-                throw new InvalidOperationException("El teléfono es obligatorio.");
+            if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
+                throw new ArgumentException("El número de teléfono del cliente no puede estar vacío.");
         }
     }
 }

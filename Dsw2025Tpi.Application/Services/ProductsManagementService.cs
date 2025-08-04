@@ -1,170 +1,126 @@
 ﻿using Dsw2025Tpi.Application.Dtos;
-using Dsw2025Tpi.Application.Exceptions;
 using Dsw2025Tpi.Application.Interfaces;
-using Dsw2025Tpi.Application.Validation;
+using Dsw2025Tpi.Data;
 using Dsw2025Tpi.Domain.Entities;
-using Dsw2025Tpi.Domain.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace Dsw2025Tpi.Application.Services
 {
     public class ProductsManagementService : IProductsManagementService
     {
-        // Repositorio inyectado para acceder a la base de datos
-        private readonly IRepository _repository;
+        private readonly Dsw2025TpiContext _context;
 
-        // Constructor que recibe el repositorio por inyección de dependencias
-        public ProductsManagementService(IRepository repository)
+        public ProductsManagementService(Dsw2025TpiContext context)
         {
-            _repository = repository;
+            _context = context;
         }
 
-        // Método que busca un producto por su ID y lo devuelve como DTO de respuesta
+        // 1. Crear un producto nuevo con validaciones del enunciado
+        public async Task<ProductModel.ResponseProductModel?> AddProduct(ProductModel.RequestProductModel request)
+        {
+            // Validación: SKU obligatorio
+            if (string.IsNullOrWhiteSpace(request.Sku))
+                throw new ArgumentException("El SKU es obligatorio.");
+
+            // Validación: SKU único
+            if (await _context.Products.AnyAsync(p => p.Sku == request.Sku))
+                throw new InvalidOperationException("El SKU ya existe.");
+
+            // Validación: nombre obligatorio
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("El nombre es obligatorio.");
+
+            // Crea instancia del producto con constructor protegido por validaciones internas
+            var product = new Product(
+                sku: request.Sku,
+                internalCode: request.InternalCode,
+                name: request.Name,
+                description: request.Description,
+                currentUnitPrice: request.CurrentUnitPrice,
+                stockQuantity: request.StockQuantity,
+                isActive: request.IsActive
+            )
+            {
+                Id = Guid.NewGuid()
+            };
+
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
+
+            return new ProductModel.ResponseProductModel(
+                product.Id, product.Sku, product.InternalCode, product.Name,
+                product.Description, product.CurrentUnitPrice,
+                product.StockQuantity, product.IsActive);
+        }
+
+        // 2. Obtener todos los productos activos
+        public async Task<IEnumerable<ProductModel.ResponseProductModel>> GetAllProducts()
+        {
+            var products = await _context.Products
+                .Where(p => p.IsActive)
+                .ToListAsync();
+
+            return products.Select(p => new ProductModel.ResponseProductModel(
+                p.Id, p.Sku, p.InternalCode, p.Name,
+                p.Description, p.CurrentUnitPrice,
+                p.StockQuantity, p.IsActive));
+        }
+
+        // 3. Obtener producto por ID
         public async Task<ProductModel.ResponseProductModel?> GetProductById(Guid id)
         {
-            // Busca el producto por su ID
-            var product = await _repository.GetById<Product>(id);
+            var p = await _context.Products.FindAsync(id);
+            if (p == null) return null;
 
-            // Si no se encuentra, lanza excepción
-            if (product == null)
-                throw new EntityNotFoundException("Producto no encontrado");
-
-            // Si se encuentra, lo transforma a un DTO de respuesta y lo retorna
-            return product != null ?
-                new ProductModel.ResponseProductModel(
-                    product.Id,
-                    product.Sku,
-                    product.InternalCode,
-                    product.Name,
-                    product.Description,
-                    product.CurrentUnitPrice,
-                    product.StockQuantity,
-                    product.IsActive
-                ) : null;
-        }
-
-        // Método que devuelve todos los productos activos como una lista de DTOs
-        public async Task<IEnumerable<ProductModel.ResponseProductModel>?> GetAllProducts()
-        {
-            // Obtiene todos los productos cuyo campo IsActive sea true
-            var products = await _repository.GetFiltered<Product>(p => p.IsActive);
-
-            // Mapea cada entidad a un DTO de respuesta
-            return products?.Select(p => new ProductModel.ResponseProductModel(
-                p.Id,
-                p.Sku,
-                p.InternalCode,
-                p.Name,
-                p.Description,
-                p.CurrentUnitPrice,
-                p.StockQuantity,
-                p.IsActive
-            ));
-        }
-
-        // Método que agrega un nuevo producto al sistema
-        public async Task<ProductModel.ResponseProductModel> AddProduct(ProductModel.RequestProductModel request)
-        {
-            // Valida el contenido del DTO de entrada
-            ProductValidator.Validate(request);
-
-            // Verifica si ya existe un producto con el mismo SKU
-            var exist = await _repository.First<Product>(p => p.Sku == request.Sku);
-            if (exist != null)
-                throw new DuplicatedEntityException($"Ya existe un producto con el Sku {request.Sku}");
-
-            // Crea una nueva instancia de producto con los datos del request
-            var product = new Product(
-                request.Sku,
-                request.InternalCode,
-                request.Name,
-                request.Description,
-                request.CurrentUnitPrice,
-                request.StockQuantity,
-                request.IsActive
-            );
-
-            // Guarda el nuevo producto en la base de datos
-            await _repository.Add(product);
-
-            // Devuelve el producto creado como DTO de respuesta
             return new ProductModel.ResponseProductModel(
-                product.Id,
-                product.Sku,
-                product.InternalCode,
-                product.Name,
-                product.Description,
-                product.CurrentUnitPrice,
-                product.StockQuantity,
-                product.IsActive
-            );
+                p.Id, p.Sku, p.InternalCode, p.Name,
+                p.Description, p.CurrentUnitPrice,
+                p.StockQuantity, p.IsActive);
         }
 
-        // Método que actualiza un producto existente, identificándolo por su ID
-        public async Task<ProductModel.ResponseProductModel> UpdateProduct(Guid id, ProductModel.RequestProductModel request)
+        // 4. Actualizar un producto existente
+        public async Task<ProductModel.ResponseProductModel?> UpdateProduct(Guid id, ProductModel.RequestProductModel request)
         {
-            // Busca el producto en la base de datos
-            var exist = await _repository.GetById<Product>(id);
-            if (exist == null)
-                throw new EntityNotFoundException("Producto no encontrado");
+            var p = await _context.Products.FindAsync(id);
+            if (p == null) return null;
 
-            // Valida el DTO de entrada
-            ProductValidator.Validate(request);
+            // Validaciones básicas
+            if (string.IsNullOrWhiteSpace(request.Sku))
+                throw new ArgumentException("El SKU es obligatorio.");
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("El nombre es obligatorio.");
 
-            // Actualiza los campos editables del producto
-            exist.Sku = request.Sku;
-            exist.InternalCode = request.InternalCode;
-            exist.Name = request.Name;
-            exist.Description = request.Description;
-            exist.CurrentUnitPrice = request.CurrentUnitPrice;
-            exist.StockQuantity = request.StockQuantity;
-            exist.IsActive = request.IsActive;
+            // Validación: evitar duplicado si cambió el SKU
+            if (p.Sku != request.Sku && await _context.Products.AnyAsync(prod => prod.Sku == request.Sku))
+                throw new InvalidOperationException("Otro producto ya tiene ese SKU.");
 
-            // Guarda los cambios en la base de datos
-            await _repository.Update(exist);
+            // Asignación de nuevos valores (validaciones internas se aplican)
+            p.Sku = request.Sku;
+            p.InternalCode = request.InternalCode;
+            p.Name = request.Name;
+            p.Description = request.Description;
+            p.CurrentUnitPrice = request.CurrentUnitPrice;
+            p.StockQuantity = request.StockQuantity;
+            p.IsActive = request.IsActive;
 
-            // Devuelve el producto actualizado como DTO de respuesta
+            await _context.SaveChangesAsync();
+
             return new ProductModel.ResponseProductModel(
-                exist.Id,
-                exist.Sku,
-                exist.InternalCode,
-                exist.Name,
-                exist.Description,
-                exist.CurrentUnitPrice,
-                exist.StockQuantity,
-                exist.IsActive
-            );
+                p.Id, p.Sku, p.InternalCode, p.Name,
+                p.Description, p.CurrentUnitPrice,
+                p.StockQuantity, p.IsActive);
         }
 
-        // Método que desactiva un producto (cambia su estado activo a false)
-        public async Task<ProductModel.ResponseProductModel> PatchProduct(Guid id)
+        // 5. Inhabilitar un producto (PATCH)
+        public async Task<bool> DisableProduct(Guid id)
         {
-            // Busca el producto por su ID
-            var exist = await _repository.GetById<Product>(id);
-            if (exist == null)
-                throw new EntityNotFoundException("Producto no encontrado.");
+            var p = await _context.Products.FindAsync(id);
+            if (p == null) return false;
 
-            // Cambia su estado activo a falso
-            exist.IsActive = false;
-
-            // Guarda los cambios
-            await _repository.Update(exist);
-
-            // Devuelve el producto actualizado como DTO de respuesta
-            return new ProductModel.ResponseProductModel(
-                exist.Id,
-                exist.Sku,
-                exist.InternalCode,
-                exist.Name,
-                exist.Description,
-                exist.CurrentUnitPrice,
-                exist.StockQuantity,
-                exist.IsActive
-            );
+            p.IsActive = false;
+            await _context.SaveChangesAsync();
+            return true;
         }
     }
 }
+
