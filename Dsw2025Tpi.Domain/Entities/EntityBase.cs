@@ -2,7 +2,7 @@
 
 public abstract class EntityBase
 {
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } //Codigo unico alfanumerico
     protected EntityBase()
     {
         Id = Guid.NewGuid();
