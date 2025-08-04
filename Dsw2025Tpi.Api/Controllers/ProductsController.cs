@@ -5,9 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Dsw2025Tpi.Api.Controllers;
 
+
+// Controlador que maneja las operaciones sobre productos
 [ApiController]
-[Route("api/[controller]")]
-[Authorize] // Requiere autenticación por defecto para todos los endpoints
+[Route("api/[controller]")] // Ruta base: /api/products
+[Authorize] // Todos los endpoints requieren autenticación (salvo los que indiquen lo contrario)
 public class ProductsController : ControllerBase
 {
     private readonly IProductsManagementService _productsService;
@@ -17,12 +19,10 @@ public class ProductsController : ControllerBase
         _productsService = productsService;
     }
 
-    // Crea un nuevo producto.
-    // Solo accesible para usuarios con rol Admin.
-    [HttpPost("create")]
-    [Authorize(Roles = "Admin")]
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    // POST /api/products
+    // Crea un nuevo producto - solo admins
+    [HttpPost]
+    [Authorize(Roles = "Admin")] // Solo administradores pueden crear productos
     public async Task<IActionResult> Create([FromBody] ProductModel.RequestProductModel model)
     {
         try
@@ -32,62 +32,53 @@ public class ProductsController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(ex.Message);
+            return BadRequest(ex.Message); // Errores de validación
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(ex.Message);
+            return BadRequest(ex.Message); // Errores de lógica de negocio
         }
     }
 
-    // Devuelve todos los productos activos.
-    // Este endpoint es público (sin autenticación).
+    // GET /api/products
+    // Lista todos los productos activos - público
     [HttpGet]
-    [AllowAnonymous]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [AllowAnonymous] // Cualquier visitante puede consultar productos
     public async Task<IActionResult> GetAll()
     {
         var products = await _productsService.GetAllProducts();
         var active = products?.Where(p => p.IsActive).ToList();
 
         if (active == null || !active.Any())
-            return NoContent();
+            return NoContent(); // Si no hay productos activos
 
-        return Ok(active);
+        return Ok(active); // Devuelve 200 OK con la lista
     }
 
-    // Devuelve un producto específico por ID.
-    // Accesible para usuarios con rol Admin o User.
+    // GET /api/products/{id}
+    // Obtiene un producto específico - clientes y admins
     [HttpGet("{id}")]
     [Authorize(Roles = "Admin,User")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id)
     {
         var product = await _productsService.GetProductById(id);
-        if (product == null || !product.IsActive)
-            return NotFound();
 
-        return Ok(product);
+        if (product == null || !product.IsActive)
+            return NotFound(); // 404 si no se encuentra o está inactivo
+
+        return Ok(product); // Devuelve el producto
     }
 
-    // Actualiza los datos de un producto existente.
-    // Solo accesible para usuarios con rol Admin.
+    // PUT /api/products/{id}
+    // Actualiza los datos de un producto - solo admins
     [HttpPut("{id}")]
     [Authorize(Roles = "Admin")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] ProductModel.RequestProductModel model)
     {
         try
         {
             var updated = await _productsService.UpdateProduct(id, model);
-            if (updated == null)
-                return NotFound();
-
-            return Ok(updated);
+            return updated == null ? NotFound() : Ok(updated);
         }
         catch (ArgumentException ex)
         {
@@ -99,18 +90,13 @@ public class ProductsController : ControllerBase
         }
     }
 
-    // Inhabilita un producto (cambia IsActive a false).
-    // Solo accesible para usuarios con rol Admin.
+    // PATCH /api/products/{id}
+    // Inhabilita un producto (lo marca como no disponible)
     [HttpPatch("{id}")]
     [Authorize(Roles = "Admin")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Disable(Guid id)
     {
         var success = await _productsService.DisableProduct(id);
-        if (!success)
-            return NotFound();
-
-        return NoContent();
+        return success ? NoContent() : NotFound();
     }
 }

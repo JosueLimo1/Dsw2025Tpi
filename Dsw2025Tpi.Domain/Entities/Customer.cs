@@ -19,6 +19,7 @@ namespace Dsw2025Tpi.Domain.Entities
             PhoneNumber = phoneNumber;
 
         }
+        public Customer() {}
 
         public ICollection<Order>? Orders { get; set; }
     }

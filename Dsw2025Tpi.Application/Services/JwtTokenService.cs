@@ -33,14 +33,17 @@ namespace Dsw2025Tpi.Application.Services
             // 2. Crear los claims del usuario
             // Los claims son datos que se incluyen en el token y que representan la identidad del usuario
             var claims = new List<Claim>
-            {
-                // Sub: sujeto del token (generalmente el email del usuario)
+{
+                // Claim que identifica al usuario por su ID único (obligatorio si vas a usarlo como CustomerId)
+                new Claim(ClaimTypes.NameIdentifier, user.Id), // 👈 NECESARIO
+
+                // Sub: sujeto del token (puede ser el email)
                 new Claim(JwtRegisteredClaimNames.Sub, user.Email ?? "noemail"),
 
-                // Claim personalizado con el nombre del usuario
-                new Claim("name", user.UserName ?? "Anonimo"),
+                // Nombre del usuario
+                new Claim(ClaimTypes.Name, user.UserName ?? "Anonimo"),
 
-                // Jti: identificador único del token (para evitar repeticiones)
+                // Identificador único del token
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 

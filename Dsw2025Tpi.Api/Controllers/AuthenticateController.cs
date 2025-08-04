@@ -1,5 +1,7 @@
 ﻿using Dsw2025Tpi.Application.Dtos;
 using Dsw2025Tpi.Application.Interfaces;
+using Dsw2025Tpi.Data;
+using Dsw2025Tpi.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -7,73 +9,98 @@ using Microsoft.AspNetCore.Mvc;
 namespace Dsw2025Tpi.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-[Authorize] // Requiere autenticación para todos los endpoints salvo que se indique lo contrario
+[Route("api/[controller]")] // Ruta base: /api/authenticate
+[AllowAnonymous] // Todos los endpoints pueden ser accedidos sin token
 public class AuthenticateController : ControllerBase
 {
     private readonly UserManager<IdentityUser> _userManager;
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly Dsw2025TpiContext _dbContext;
 
-    public AuthenticateController(UserManager<IdentityUser> userManager, IJwtTokenService jwtTokenService)
+    public AuthenticateController(
+        UserManager<IdentityUser> userManager,
+        IJwtTokenService jwtTokenService,
+        Dsw2025TpiContext dbContext)
     {
         _userManager = userManager;
         _jwtTokenService = jwtTokenService;
+        _dbContext = dbContext;
     }
 
-    // Endpoint para registrar nuevos usuarios con rol "User" por defecto.
-    // Solo accesible para usuarios con rol "Admin"
+    // ===============================
+    // POST /api/authenticate/register
+    // Registra un nuevo usuario con rol "User" y lo guarda también como Customer
+    // ===============================
     [HttpPost("register")]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Register([FromBody] RegisterModel model)
     {
-        // Verifica si ya existe un usuario con el mismo email
-        var existingUser = await _userManager.FindByEmailAsync(model.eMail);
+        // Validación básica
+        if (!ModelState.IsValid)
+            return BadRequest("Datos inválidos.");
+
+        // Verificar si ya existe un usuario con ese email
+        var existingUser = await _userManager.FindByEmailAsync(model.Email);
         if (existingUser != null)
             return BadRequest("Ya existe un usuario con ese email.");
 
-        // Crea un nuevo usuario de Identity
+        // Crear nuevo usuario para Identity
         var newUser = new IdentityUser
         {
             UserName = model.Username,
-            Email = model.eMail,
+            Email = model.Email,
             EmailConfirmed = true
         };
 
-        // Intenta guardar el nuevo usuario con la contraseña proporcionada
+        // Intentar guardar el usuario en la base de datos de autenticación
         var result = await _userManager.CreateAsync(newUser, model.Password);
-
         if (!result.Succeeded)
-            return BadRequest("Error al crear el usuario: " + string.Join("; ", result.Errors.Select(e => e.Description)));
+        {
+            var errores = string.Join("; ", result.Errors.Select(e => e.Description));
+            return BadRequest("Error al crear el usuario: " + errores);
+        }
 
-        // Asigna el rol "User" por defecto
+        // Asignar rol "User"
         await _userManager.AddToRoleAsync(newUser, "User");
+
+        // Crear también una entrada en la tabla Customer con el mismo ID del usuario
+        var customer = new Customer
+        {
+            Id = Guid.Parse(newUser.Id), // Relación directa entre Identity y Customer
+            Name = model.Name,
+            Email = model.Email,
+            PhoneNumber = model.PhoneNumber
+        };
+
+        _dbContext.Customers.Add(customer);
+        await _dbContext.SaveChangesAsync();
 
         return Ok("Usuario registrado correctamente con rol 'User'.");
     }
 
-    // Endpoint para login de usuario. Acceso público.
+    // ===============================
+    // POST /api/authenticate/login
+    // Valida credenciales y devuelve un token JWT válido
+    // ===============================
     [HttpPost("login")]
-    [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginModel model)
     {
-        // Busca el usuario por nombre
+        // Buscar usuario por nombre
         var user = await _userManager.FindByNameAsync(model.Username);
         if (user == null)
             return Unauthorized("Usuario no encontrado.");
 
-        // Verifica la contraseña
+        // Validar contraseña
         var isValid = await _userManager.CheckPasswordAsync(user, model.Password);
         if (!isValid)
             return Unauthorized("Contraseña incorrecta.");
 
-        // Obtiene los roles del usuario para incluirlos en el token
+        // Obtener roles del usuario
         var roles = await _userManager.GetRolesAsync(user);
 
-        // Genera el token JWT con los claims necesarios
+        // Generar token con datos y roles incluidos
         var token = _jwtTokenService.GenerateToken(user, roles);
 
-        // Retorna el token como respuesta
+        // Retornar token al frontend
         return Ok(new { token });
     }
 }
-
