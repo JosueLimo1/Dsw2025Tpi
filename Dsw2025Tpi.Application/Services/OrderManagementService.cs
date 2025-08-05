@@ -6,10 +6,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dsw2025Tpi.Application.Services;
 
+// Implementación del servicio de gestión de órdenes
 public class OrdersManagementService : IOrdersManagementService
 {
+    // Contexto de base de datos inyectado
     private readonly Dsw2025TpiContext _context;
 
+    // Constructor que recibe el contexto por inyección de dependencias
     public OrdersManagementService(Dsw2025TpiContext context)
     {
         _context = context;
@@ -21,40 +24,39 @@ public class OrdersManagementService : IOrdersManagementService
     /// </summary>
     public async Task<OrderModel.ResponseOrderModel> CreateOrder(OrderModel.RequestOrderModel request)
     {
-        // 1. Validar que el cliente exista
+        // Verifica que el cliente exista en la base
         var customer = await _context.Customers.FindAsync(request.CustomerId);
         if (customer is null)
             throw new ArgumentException("Cliente no encontrado");
 
-        // 2. Crear la orden base con sus datos (sin ítems aún)
+        // Crea una nueva orden con los datos proporcionados (sin ítems aún)
         var order = new Order(
-            request.Date,
-            request.ShippingAddress,
-            request.BillingAddress,
-            request.Notes,
-            request.CustomerId)
+           DateTime.UtcNow, // Fecha actual del sistema
+           request.ShippingAddress,
+           request.BillingAddress,
+           null, // El campo Notes fue eliminado del request
+           request.CustomerId)
         {
-            Id = Guid.NewGuid() // el ID lo generamos nosotros (como pide el TPI)
+            Id = Guid.NewGuid() // Genera un nuevo ID para la orden
         };
 
-        // 3. Procesar cada ítem incluido en la orden
-        foreach (var item in request.Items)
+        // Recorre todos los ítems enviados en la orden
+        foreach (var item in request.OrderItems)
         {
-            // 3.1 Validar que el producto exista
+            // Verifica que el producto exista
             var product = await _context.Products.FindAsync(item.ProductId);
             if (product is null)
                 throw new ArgumentException($"Producto con ID {item.ProductId} no encontrado");
 
-            // 3.2 Agregar el ítem a la orden (valida stock, cantidad > 0 y si el producto está activo)
-            // También descuenta el stock del producto si todo es válido
+            // Agrega el ítem a la orden y valida stock y estado del producto
             order.AddItem(product, item.Quantity);
         }
 
-        // 4. Guardar la orden y sus ítems en la base de datos
+        // Agrega la orden a la base de datos y guarda los cambios
         _context.Orders.Add(order);
         await _context.SaveChangesAsync();
 
-        // 5. Retornar un DTO con la información básica de la orden creada
+        // Devuelve un DTO con los datos de la orden creada
         return new OrderModel.ResponseOrderModel(
             order.Id,
             order.Date,
@@ -71,23 +73,24 @@ public class OrdersManagementService : IOrdersManagementService
     /// </summary>
     public async Task<IEnumerable<OrderModel.ResponseOrderModel>> GetAllOrders(OrderFilterModel? filter = null)
     {
-        // 1. Construir el query base sobre la tabla Orders
+        // Consulta base sobre la tabla Orders
         var query = _context.Orders.AsQueryable();
 
-        // 2. Aplicar filtros si fueron enviados
+        // Aplica filtro por cliente si se especificó
         if (filter is not null)
         {
             if (filter.CustomerId.HasValue)
                 query = query.Where(o => o.CustomerId == filter.CustomerId.Value);
 
+            // Aplica filtro por estado si se especificó
             if (filter.Status.HasValue)
                 query = query.Where(o => o.Status == filter.Status.Value);
         }
 
-        // 3. Ejecutar la consulta a la base de datos
+        // Ejecuta la consulta
         var orders = await query.ToListAsync();
 
-        // 4. Mapear cada orden a su DTO de respuesta
+        // Convierte cada orden a su modelo de respuesta
         return orders.Select(o => new OrderModel.ResponseOrderModel(
             o.Id,
             o.Date,
@@ -104,16 +107,16 @@ public class OrdersManagementService : IOrdersManagementService
     /// </summary>
     public async Task<OrderModel.ResponseOrderModel?> GetOrderById(Guid id)
     {
-        // 1. Trae la orden e incluye los ítems y los productos de cada ítem
+        // Incluye ítems y productos relacionados a la orden
         var order = await _context.Orders
             .Include(o => o.OrderItems)
             .ThenInclude(oi => oi.Product)
             .FirstOrDefaultAsync(o => o.Id == id);
 
-        // 2. Si no existe, retorna null
+        // Si no existe la orden, devuelve null
         if (order is null) return null;
 
-        // 3. Mapear a DTO de respuesta
+        // Devuelve el modelo de respuesta
         return new OrderModel.ResponseOrderModel(
             order.Id,
             order.Date,
@@ -126,21 +129,21 @@ public class OrdersManagementService : IOrdersManagementService
     }
 
     /// <summary>
-    /// Cambia el estado de una orden existente (ej: de Pendiente a Enviado).
+    /// Cambia el estado de una orden existente.
     /// </summary>
     public async Task<OrderModel.ResponseOrderModel?> UpdateOrderStatus(Guid id, OrderStatus newStatus)
     {
-        // 1. Buscar la orden por ID
+        // Busca la orden por ID
         var order = await _context.Orders.FindAsync(id);
         if (order is null) return null;
 
-        // 2. Cambiar el estado de la orden
+        // Cambia su estado
         order.ChangeStatus(newStatus);
 
-        // 3. Guardar cambios
+        // Guarda cambios
         await _context.SaveChangesAsync();
 
-        // 4. Retornar la orden actualizada
+        // Devuelve la orden actualizada
         return new OrderModel.ResponseOrderModel(
             order.Id,
             order.Date,
@@ -151,9 +154,10 @@ public class OrdersManagementService : IOrdersManagementService
             order.Status
         );
     }
+
+    // Verifica si un cliente existe (método auxiliar)
     public async Task<bool> CustomerExists(Guid customerId)
     {
         return await _context.Customers.AnyAsync(c => c.Id == customerId);
     }
 }
-

@@ -23,7 +23,7 @@ namespace Dsw2025Tpi.Application.Validation
             if (string.IsNullOrWhiteSpace(request.BillingAddress) || request.BillingAddress.Length > 256)
                 throw new InvalidOperationException("La dirección de facturación es obligatoria y no puede superar los 256 caracteres.");
 
-            if (request.Items == null || request.Items.Count == 0)
+            if (request.OrderItems == null || request.OrderItems.Count == 0)
                 throw new InvalidOperationException("Debe incluir al menos un ítem en la orden.");
         }
     }
