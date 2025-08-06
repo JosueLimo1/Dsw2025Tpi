@@ -9,12 +9,13 @@ namespace Dsw2025Tpi.Domain.Entities
 {
     public class Product : EntityBase
     {
-  
-
         public string Sku { get; set; }
         public string InternalCode { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
+        public bool IsActive { get; set; }
+        public ICollection<OrderItem>? Items { get; set; }
+
 
         private decimal _currentUnitPrice;
         public decimal CurrentUnitPrice
@@ -38,11 +39,7 @@ namespace Dsw2025Tpi.Domain.Entities
                 _stockQuantity = value;
             }
         }
-
-        public bool IsActive { get; set; }
-        public ICollection<OrderItem>? Items { get; set; }
-
-        public void Toggle()
+        public void Toggle() // Sirve para activar o desactivar algo, como un interruptor.
         {
             IsActive = !IsActive;
         }

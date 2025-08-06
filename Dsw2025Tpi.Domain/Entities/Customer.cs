@@ -17,7 +17,6 @@ namespace Dsw2025Tpi.Domain.Entities
             Email = email;
             Name = name;
             PhoneNumber = phoneNumber;
-
         }
         public Customer() {}
 
