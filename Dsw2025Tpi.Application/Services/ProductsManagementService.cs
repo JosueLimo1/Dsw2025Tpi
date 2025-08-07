@@ -1,10 +1,11 @@
-﻿using Dsw2025Tpi.Application.Dtos;
-using Dsw2025Tpi.Application.Interfaces;
-using Dsw2025Tpi.Data;
-using Dsw2025Tpi.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
+﻿using Dsw2025Tpi.Application.Dtos; // Importa los modelos de solicitud y respuesta
+using Dsw2025Tpi.Application.Exceptions; // ✅ Importa las excepciones personalizadas
+using Dsw2025Tpi.Application.Interfaces; // Importa la interfaz que implementa este servicio
+using Dsw2025Tpi.Data; // Acceso al contexto de base de datos
+using Dsw2025Tpi.Domain.Entities; // Importa la entidad Product
+using Microsoft.EntityFrameworkCore; // Para operaciones asincrónicas con la base de datos
+using Dsw2025Tpi.Application.Validation;
 
-// Define el namespace donde se encuentra el servicio
 namespace Dsw2025Tpi.Application.Services
 {
     // Implementación concreta del servicio de productos, basada en la interfaz IProductsManagementService
@@ -24,15 +25,15 @@ namespace Dsw2025Tpi.Application.Services
         {
             // Valida que el SKU no esté vacío
             if (string.IsNullOrWhiteSpace(request.Sku))
-                throw new ArgumentException("El SKU es obligatorio.");
+                throw new BadRequestException("El SKU es obligatorio."); // ⛔ Excepción personalizada
 
-            // Verifica que el SKU sea único
+            // Verifica que el SKU no esté duplicado
             if (await _context.Products.AnyAsync(p => p.Sku == request.Sku))
-                throw new InvalidOperationException("El SKU ya existe.");
+                throw new DuplicatedEntityException("El SKU ya existe."); // ⛔ Excepción personalizada
 
             // Valida que el nombre del producto no esté vacío
             if (string.IsNullOrWhiteSpace(request.Name))
-                throw new ArgumentException("El nombre es obligatorio.");
+                throw new BadRequestException("El nombre es obligatorio."); // ⛔ Excepción personalizada
 
             // Crea una nueva instancia de Product con los datos del request
             var product = new Product(
@@ -45,17 +46,20 @@ namespace Dsw2025Tpi.Application.Services
                 isActive: request.IsActive
             )
             {
-                // Genera manualmente el Id del producto
+                // Genera automaticamente el Id del producto
                 Id = Guid.NewGuid()
             };
 
-            // Agrega el producto a la base de datos
+            // 🔸 VALIDACIÓN: Producto válido según tus reglas de negocio
+            ProductValidator.Validate(product);
+
+            // Agrega el producto al DbSet
             _context.Products.Add(product);
 
-            // Guarda los cambios en la base
+            // Guarda los cambios en la base de datos
             await _context.SaveChangesAsync();
 
-            // Devuelve el producto recién creado en formato de respuesta
+            // Devuelve el producto recién creado como un DTO de respuesta
             return new ProductModel.ResponseProductModel(
                 product.Id,
                 product.Sku,
@@ -71,12 +75,12 @@ namespace Dsw2025Tpi.Application.Services
         // Método que devuelve todos los productos activos
         public async Task<IEnumerable<ProductModel.ResponseProductModel>> GetAllProducts()
         {
-            // Obtiene los productos que están marcados como activos
+            // Consulta los productos activos en la base
             var products = await _context.Products
                 .Where(p => p.IsActive)
                 .ToListAsync();
 
-            // Mapea cada producto a su DTO de respuesta
+            // Transforma la lista de entidades en una lista de DTOs
             return products.Select(p => new ProductModel.ResponseProductModel(
                 p.Id,
                 p.Sku,
@@ -89,14 +93,16 @@ namespace Dsw2025Tpi.Application.Services
             ));
         }
 
-        // Método que devuelve un producto específico por ID
+        // Método que devuelve un producto específico por su ID
         public async Task<ProductModel.ResponseProductModel?> GetProductById(Guid id)
         {
-            // Busca el producto en la base por su ID
+            // Busca el producto por ID
             var p = await _context.Products.FindAsync(id);
+
+            // Si no se encuentra, devuelve null
             if (p == null) return null;
 
-            // Devuelve el producto en formato DTO
+            // Devuelve los datos del producto como un DTO
             return new ProductModel.ResponseProductModel(
                 p.Id,
                 p.Sku,
@@ -114,19 +120,21 @@ namespace Dsw2025Tpi.Application.Services
         {
             // Busca el producto por ID
             var p = await _context.Products.FindAsync(id);
+
+            // Si no se encuentra, devuelve null
             if (p == null) return null;
 
             // Valida que el SKU no esté vacío
             if (string.IsNullOrWhiteSpace(request.Sku))
-                throw new ArgumentException("El SKU es obligatorio.");
+                throw new BadRequestException("El SKU es obligatorio."); // ⛔ Excepción personalizada
 
             // Valida que el nombre no esté vacío
             if (string.IsNullOrWhiteSpace(request.Name))
-                throw new ArgumentException("El nombre es obligatorio.");
+                throw new BadRequestException("El nombre es obligatorio."); // ⛔ Excepción personalizada
 
-            // Si cambió el SKU, verifica que el nuevo no esté duplicado
+            // Si el SKU fue modificado, verifica que no esté duplicado
             if (p.Sku != request.Sku && await _context.Products.AnyAsync(prod => prod.Sku == request.Sku))
-                throw new InvalidOperationException("Otro producto ya tiene ese SKU.");
+                throw new DuplicatedEntityException("Otro producto ya tiene ese SKU."); // ⛔ Excepción personalizada
 
             // Asigna los nuevos valores al producto
             p.Sku = request.Sku;
@@ -137,7 +145,12 @@ namespace Dsw2025Tpi.Application.Services
             p.StockQuantity = request.StockQuantity;
             p.IsActive = request.IsActive;
 
-            // Guarda los cambios en la base
+
+            // 🔸 VALIDACIÓN: Producto válido luego de la actualización
+            ProductValidator.Validate(p);
+
+
+            // Guarda los cambios
             await _context.SaveChangesAsync();
 
             // Devuelve el producto actualizado como DTO
@@ -153,20 +166,25 @@ namespace Dsw2025Tpi.Application.Services
             );
         }
 
-        // Método para inhabilitar (desactivar) un producto
+        // Método para desactivar un producto (soft delete)
         public async Task<bool> DisableProduct(Guid id)
         {
             // Busca el producto por ID
             var p = await _context.Products.FindAsync(id);
+
+            // Si no se encuentra, devuelve false
             if (p == null) return false;
 
             // Marca el producto como inactivo
             p.IsActive = false;
 
+            // SI NOS PIDE BORRAR DE LA BD 
+            // _context.Products.Remove(p);
+
             // Guarda los cambios
             await _context.SaveChangesAsync();
 
-            // Devuelve true si fue exitoso
+            // Devuelve true indicando éxito
             return true;
         }
     }

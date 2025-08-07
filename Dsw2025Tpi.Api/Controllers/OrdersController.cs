@@ -4,120 +4,120 @@ using Dsw2025Tpi.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-
-namespace Dsw2025Tpi.Api.Controllers;
-
-[ApiController]
-[Route("api/[controller]")] // Ruta base: /api/orders
-[Authorize] // Todos los endpoints requieren token, salvo los que tengan [AllowAnonymous]
-public class OrdersController : ControllerBase
+namespace Dsw2025Tpi.Api.Controllers
 {
-    private readonly IOrdersManagementService _ordersService;
+    // Marca la clase como controlador de API REST
+    [ApiController]
 
-    // Se inyecta el servicio que contiene la lógica para manejar órdenes
-    public OrdersController(IOrdersManagementService ordersService)
+    // Define la ruta base para todos los endpoints: /api/orders
+    [Route("api/[controller]")]
+
+    // Requiere autenticación JWT para todos los endpoints de este controlador (salvo que se indique lo contrario)
+    [Authorize]
+    public class OrdersController : ControllerBase
     {
-        _ordersService = ordersService;
-    }
+        // Servicio inyectado que maneja la lógica relacionada con órdenes
+        private readonly IOrdersManagementService _ordersService;
 
-    // POST: /api/orders
-    // Permite a un cliente (rol User) registrar una nueva orden
-    [HttpPost]
-    [Authorize(Roles = "User")] // Solo clientes pueden crear órdenes
-    [ProducesResponseType(StatusCodes.Status201Created)] // Devuelve 201 si se crea correctamente
-    [ProducesResponseType(StatusCodes.Status400BadRequest)] // Devuelve 400 si hay errores
-    public async Task<IActionResult> Create([FromBody] OrderModel.RequestOrderModel request)
-    {
-        // Se obtiene el ID del usuario autenticado desde el token JWT
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-        // Se valida que el ID del cliente coincida con el ID del usuario autenticado
-        if (string.IsNullOrEmpty(userId) || request.CustomerId.ToString() != userId)
-            return BadRequest("El ID del cliente no coincide con el usuario autenticado.");
-
-        try
+        // Constructor con inyección de dependencias
+        public OrdersController(IOrdersManagementService ordersService)
         {
-            // Se delega la creación al servicio
-            var createdOrder = await _ordersService.CreateOrder(request);
-
-            // Se devuelve 201 con la ruta para consultar la orden
-            return CreatedAtAction(nameof(GetById), new { id = createdOrder.Id }, createdOrder);
+            _ordersService = ordersService;
         }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message); // Error por datos inválidos
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ex.Message); // Error por stock insuficiente u otra lógica
-        }
-    }
 
-    // GET: /api/orders
-    // Permite obtener todas las órdenes con filtros opcionales
-    // Los clientes solo pueden ver sus órdenes, los admins pueden ver todas
-    [HttpGet]
-    [Authorize(Roles = "User,Admin")] // Tanto Admin como User pueden acceder
-    public async Task<IActionResult> GetAll([FromQuery] OrderFilterModel? filter)
-    {
-        // Si es cliente, debe consultar solo sus órdenes
-        if (User.IsInRole("User"))
+        // ================================
+        // POST: /api/orders
+        // Crea una nueva orden
+        // Solo pueden acceder los usuarios con rol "User"
+        // ================================
+        [HttpPost]
+        [Authorize(Roles = "User")]
+        [ProducesResponseType(StatusCodes.Status201Created)]       // 201 si se crea correctamente
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]    // 400 si falla validación
+        public async Task<IActionResult> Create([FromBody] OrderModel.RequestOrderModel request)
         {
+            // Se obtiene el ID del usuario autenticado desde el token JWT
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            // Validar que se esté usando su propio customerId
-            if (filter == null || string.IsNullOrEmpty(filter.CustomerId.ToString()))
-                return BadRequest("Falta el parámetro customerId para el cliente.");
+            // Se verifica que el ID del cliente enviado coincida con el ID del usuario autenticado
+            // Esta es una validación técnica, no de dominio → se maneja directamente acá
+            if (string.IsNullOrEmpty(userId) || request.CustomerId.ToString() != userId)
+                return BadRequest("El ID del cliente no coincide con el usuario autenticado.");
 
-            if (filter.CustomerId.ToString() != userId)
-                return Forbid("No podés ver órdenes de otro cliente.");
+            // Se delega la lógica al servicio, que lanzará excepciones personalizadas si algo falla
+            // Llama al método CreateOrder del servicio
+            var createdOrder = await _ordersService.CreateOrder(request);
+
+            // Devuelve 201 Created con la URL para consultar la orden recién creada
+            return CreatedAtAction(nameof(GetById), new { id = createdOrder.Id }, createdOrder);
         }
 
-        // Se obtienen las órdenes desde el servicio
-        var orders = await _ordersService.GetAllOrders(filter);
-        return Ok(orders); // 200 OK con la lista de órdenes
-    }
-
-    // GET: /api/orders/{id}
-    // Devuelve los detalles de una orden específica
-    [HttpGet("{id}")]
-    [Authorize(Roles = "Admin")] // Solo los administradores pueden consultar cualquier orden
-    [ProducesResponseType(StatusCodes.Status200OK)] // Devuelve 200 si existe
-    [ProducesResponseType(StatusCodes.Status404NotFound)] // Devuelve 404 si no existe
-    public async Task<IActionResult> GetById(Guid id)
-    {
-        var order = await _ordersService.GetOrderById(id);
-
-        // Si no existe, devolver 404
-        return order == null ? NotFound() : Ok(order);
-    }
-
-    // PUT: /api/orders/{id}/status
-    // Permite a los administradores cambiar el estado de una orden
-    [HttpPut("{id}/status")]
-    [Authorize(Roles = "Admin")] // Solo admins pueden cambiar el estado
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateStatusDto dto)
-    {
-        try
+        // ================================
+        // GET: /api/orders
+        // Devuelve todas las órdenes del sistema (Admin) o del usuario actual (User)
+        // ================================
+        [HttpGet]
+        [Authorize(Roles = "User,Admin")]
+        public async Task<IActionResult> GetAll([FromQuery] OrderFilterModel? filter)
         {
+            // Si el usuario es un cliente (rol User), debe consultar solo sus órdenes
+            if (User.IsInRole("User"))
+            {
+                // Se extrae el ID del usuario autenticado
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                // Validación: si no se proporciona el customerId en el filtro, se devuelve 400
+                if (filter == null || filter.CustomerId == Guid.Empty)
+                    return BadRequest("Falta el parámetro customerId para el cliente.");
+
+                // Si el cliente intenta acceder a órdenes de otro, se bloquea
+                if (filter.CustomerId.ToString() != userId)
+                    return Forbid("No podés ver órdenes de otro cliente.");
+            }
+
+            // Se llama al servicio para obtener las órdenes, según filtros y rol
+            var orders = await _ordersService.GetAllOrders(filter);
+
+            // Devuelve 200 OK con la lista
+            return Ok(orders);
+        }
+
+        // ================================
+        // GET: /api/orders/{id}
+        // Devuelve los detalles de una orden específica
+        // Solo los administradores pueden acceder a este endpoint
+        // ================================
+        [HttpGet("{id}")]
+        [Authorize(Roles = "Admin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]          // 200 si se encuentra la orden
+        [ProducesResponseType(StatusCodes.Status404NotFound)]    // 404 si no se encuentra
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            // Se busca la orden por su ID
+            var order = await _ordersService.GetOrderById(id);
+
+            // Si no existe, se devuelve 404 Not Found
+            return order == null ? NotFound() : Ok(order);
+        }
+
+        // ================================
+        // PUT: /api/orders/{id}/status
+        // Actualiza el estado de una orden (solo Admin)
+        // ================================
+        [HttpPut("{id}/status")]
+        [Authorize(Roles = "Admin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]           // 200 si se actualiza
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]   // 400 si falla validación de estado
+        [ProducesResponseType(StatusCodes.Status404NotFound)]     // 404 si no se encuentra la orden
+        public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateStatusDto dto)
+        {
+            // Se delega la lógica de actualización al servicio
             var updated = await _ordersService.UpdateOrderStatus(id, dto.NewStatus);
 
-            // Si no se encuentra la orden, devolver 404
+            // Si no se encontró la orden, devuelve 404
             return updated == null ? NotFound() : Ok(updated);
         }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message); // Error por transición de estado inválida
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ex.Message); // Otros errores de negocio
-        }
+        
     }
-
-    // Record simple para actualizar el estado de una orden
-    public record UpdateStatusDto(OrderStatus NewStatus);
 }
+

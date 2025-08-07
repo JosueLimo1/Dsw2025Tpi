@@ -14,272 +14,280 @@ using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
 
-// Namespace principal del proyecto web/API
-namespace Dsw2025Tpi.Api;
-
-// Clase principal de arranque de la aplicación ASP.NET Core
-public class Program
+namespace Dsw2025Tpi.Api
 {
-    // Método de entrada asincrónico (permite tareas como la creación de usuarios)
-    public static async Task Main(string[] args)
+    // Clase principal de arranque de la aplicación ASP.NET Core
+    public class Program
     {
-        // Crea el generador de la aplicación web (con DI, config, etc.)
-        var builder = WebApplication.CreateBuilder(args);
-
-        // ==========================
-        // JWT CONFIGURATION
-        // ==========================
-
-        // Obtiene la sección Jwt del appsettings.json
-        var jwtConfig = builder.Configuration.GetSection("Jwt");
-
-        // Recupera la clave secreta para firmar tokens JWT
-        var jwtKey = jwtConfig["Key"] ?? throw new Exception("Falta Jwt:Key en appsettings.json");
-
-        // Recupera el emisor del token
-        var jwtIssuer = jwtConfig["Issuer"] ?? throw new Exception("Falta Jwt:Issuer en appsettings.json");
-
-        // Recupera la audiencia permitida para el token
-        var jwtAudience = jwtConfig["Audience"] ?? throw new Exception("Falta Jwt:Audience en appsettings.json");
-
-        // Crea una clave de firma simétrica basada en la clave secreta
-        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-
-        // ==========================
-        // SERVICES
-        // ==========================
-
-        // Registra los controladores de la API
-        builder.Services.AddControllers();
-
-        // Agrega el explorador de endpoints (para Swagger)
-        builder.Services.AddEndpointsApiExplorer();
-
-        // Configura Swagger para documentación interactiva de la API
-        builder.Services.AddSwaggerGen(c =>
+        // Método de entrada asincrónico
+        // Este método configura y ejecuta toda la app (registro de servicios, migraciones, middleware, etc.)
+        public static async Task Main(string[] args)
         {
-            c.SwaggerDoc("v1", new OpenApiInfo { Title = "Dsw2025Tpi.Api", Version = "v1" });
+            // Crea el generador de la aplicación web
+            var builder = WebApplication.CreateBuilder(args);
 
-            // Agrega esquema de seguridad tipo Bearer para JWT
-            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-            {
-                Description = "Ingrese un token JWT válido con el esquema 'Bearer {token}'",
-                Name = "Authorization",
-                In = ParameterLocation.Header,
-                Type = SecuritySchemeType.ApiKey,
-                Scheme = "Bearer"
-            });
+            // ==========================
+            // JWT CONFIGURATION
+            // ==========================
 
-            // Define el requerimiento de seguridad para aplicar a los endpoints
-            c.AddSecurityRequirement(new OpenApiSecurityRequirement
+            // Lee la configuración de JWT desde appsettings.json
+            var jwtConfig = builder.Configuration.GetSection("Jwt");
+
+            // Obtiene la clave secreta para firmar los tokens JWT
+            var jwtKey = jwtConfig["Key"] ?? throw new Exception("Falta Jwt:Key en appsettings.json");
+
+            // Emisor del token (la API)
+            var jwtIssuer = jwtConfig["Issuer"] ?? throw new Exception("Falta Jwt:Issuer en appsettings.json");
+
+            // Audiencia esperada (el frontend u otro consumidor autorizado)
+            var jwtAudience = jwtConfig["Audience"] ?? throw new Exception("Falta Jwt:Audience en appsettings.json");
+
+            // Convierte la clave en una clave simétrica para la firma del token
+            var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+
+            // ==========================
+            // SERVICES
+            // ==========================
+
+            // Registra los controladores como endpoints RESTful
+            builder.Services.AddControllers();
+
+            // Habilita Swagger (documentación de tu API)I
+            builder.Services.AddEndpointsApiExplorer();
+            builder.Services.AddSwaggerGen(c =>
             {
+                // Define la info básica del Swagger
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Dsw2025Tpi.Api", Version = "v1" });
+
+                // Agrega opción para ingresar el token JWT en Swagger
+                c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
-                    new OpenApiSecurityScheme
+                    Description = "Ingrese un token JWT en el encabezado como: Bearer {token}",
+                    Name = "Authorization",
+                    In = ParameterLocation.Header,
+                    Type = SecuritySchemeType.ApiKey,
+                    Scheme = "Bearer"
+                });
+
+                // Esto le dice a Swagger que tu API necesita un token para funcionar
+                // en los endpoints protegidos.
+                c.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
                     {
-                        Reference = new OpenApiReference
+                        new OpenApiSecurityScheme
                         {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            },
+                            Scheme = "Bearer",
+                            Name = "Bearer",
+                            In = ParameterLocation.Header
                         },
-                        Scheme = "Bearer",
-                        Name = "Bearer",
-                        In = ParameterLocation.Header
-                    },
-                    new List<string>()
-                }
+                        new List<string>()
+                    }
+                });
             });
-        });
 
-        // Agrega el servicio de health checks (verificación de salud de la app)
-        builder.Services.AddHealthChecks();
+            // Agrega un servicio de monitoreo (ping de salud)
+            //builder.Services.AddHealthChecks();
 
-        // ==========================
-        // IDENTITY + JWT
-        // ==========================
+            // ==========================
+            // IDENTITY + JWT
+            // ==========================
 
-        // Configura Identity para gestión de usuarios, contraseñas y roles
-        builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
-        {
-            options.Password.RequiredLength = 6;
-            options.Password.RequireDigit = true;
-            options.Password.RequireUppercase = false;
-            options.Password.RequireLowercase = false;
-            options.Password.RequireNonAlphanumeric = false;
-        })
-        .AddEntityFrameworkStores<AuthenticateContext>() // Usa AuthenticateContext como base de datos
-        .AddDefaultTokenProviders(); // Activa generación de tokens para recuperación de contraseña, etc.
-
-        // Configura el esquema de autenticación por defecto como JWT Bearer
-        builder.Services.AddAuthentication(options =>
-        {
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
-        .AddJwtBearer(options =>
-        {
-            options.RequireHttpsMetadata = false; // No requiere HTTPS (útil para testing local)
-            options.SaveToken = true; // Guarda el token en el contexto
-
-            // Parámetros de validación del token
-            options.TokenValidationParameters = new TokenValidationParameters
+            // Configura el sistema de autenticación de usuarios (Identity) + roles
+            builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
             {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwtIssuer,
-                ValidAudience = jwtAudience,
-                IssuerSigningKey = signingKey,
-                RoleClaimType = ClaimTypes.Role,
-                NameClaimType = ClaimTypes.NameIdentifier,
-                ClockSkew = TimeSpan.Zero // No permite gracia en expiración (vence justo en la hora)
-            };
+                // Reglas mínimas para contraseñas
+                options.Password.RequiredLength = 6;
+                options.Password.RequireDigit = true;
+                options.Password.RequireUppercase = false;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireNonAlphanumeric = false;
+            })
+            .AddEntityFrameworkStores<AuthenticateContext>() // Usa tu contexto de autenticación
+            .AddDefaultTokenProviders(); // Habilita generación de tokens (reset pass, confirmación, etc.)
 
-            // Eventos personalizados para errores en autenticación
-            options.Events = new JwtBearerEvents
+            // Configura el sistema de autenticación por JWT (Bearer)
+            builder.Services.AddAuthentication(options =>
+            { 
+                // Establece JWT como el sistema de autenticación predeterminado
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
             {
-                OnAuthenticationFailed = context =>
+                options.RequireHttpsMetadata = false; // Permite HTTP (solo útil para testing local)
+                options.SaveToken = true; // Guarda el token en el contexto del request
+
+                // Configura cómo se valida el token JWT
+                options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    context.NoResult();
-                    context.Response.StatusCode = 401;
-                    context.Response.ContentType = "text/plain";
-                    return context.Response.WriteAsync("Token inválido o expirado.");
-                },
-                OnChallenge = context =>
-                {
-                    context.HandleResponse();
-                    context.Response.StatusCode = 401;
-                    context.Response.ContentType = "application/json";
-                    return context.Response.WriteAsync("{\"error\": \"Token requerido o inválido.\"}");
-                }
-            };
-        });
-
-        // Agrega el servicio de autorización (basado en roles o claims)
-        builder.Services.AddAuthorization();
-
-        // ==========================
-        // CUSTOM SERVICES & DB
-        // ==========================
-
-        // Registra todos los servicios del dominio (productos, órdenes, etc.)
-        builder.Services.AddDomainServices(builder.Configuration);
-
-        // Registra el contexto de autenticación (Identity)
-        builder.Services.AddDbContext<AuthenticateContext>(options =>
-        {
-            options.UseSqlServer(builder.Configuration.GetConnectionString("AuthDb"));
-        });
-
-        // Servicio encargado de generar tokens JWT
-        builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
-
-        // ==========================
-        // CORS
-        // ==========================
-
-        // Habilita CORS para permitir cualquier origen, método y header
-        builder.Services.AddCors(options =>
-        {
-            options.AddPolicy("AllowAll", policy =>
-            {
-                policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
-            });
-        });
-
-        // Construye la aplicación
-        var app = builder.Build();
-
-        // Aplica la política de CORS
-        app.UseCors("AllowAll");
-
-        // ==========================
-        // DB SEED + ROLES
-        // ==========================
-
-        // Crea un scope para servicios que se usan temporalmente
-        using (var scope = app.Services.CreateScope())
-        {
-            // Obtiene el contexto de dominio y aplica migraciones pendientes
-            var dbContext = scope.ServiceProvider.GetRequiredService<Dsw2025TpiContext>();
-            dbContext.Database.Migrate();
-            dbContext.SeedDatabase(); // Ejecuta el método de carga inicial de datos (clientes)
-
-            // Aplica migraciones también al contexto de autenticación
-            var authContext = scope.ServiceProvider.GetRequiredService<AuthenticateContext>();
-            authContext.Database.Migrate();
-
-            // Recupera servicios de Identity para roles y usuarios
-            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
-
-            // Obtiene la lista de roles a crear desde configuración
-            var roles = builder.Configuration.GetSection("Roles").Get<List<string>>() ?? new() { "Admin", "User" };
-
-            // Crea los roles si aún no existen
-            foreach (var role in roles)
-            {
-                if (!await roleManager.RoleExistsAsync(role))
-                {
-                    await roleManager.CreateAsync(new IdentityRole(role));
-                }
-            }
-
-            // Obtiene credenciales del usuario administrador desde configuración
-            var adminUsername = builder.Configuration["AdminUser:Username"];
-            var adminEmail = builder.Configuration["AdminUser:Email"];
-            var adminPassword = builder.Configuration["AdminUser:Password"];
-
-            // Crea el usuario administrador si no existe
-            if (await userManager.FindByNameAsync(adminUsername) == null)
-            {
-                var adminUser = new IdentityUser
-                {
-                    UserName = adminUsername,
-                    Email = adminEmail,
-                    EmailConfirmed = true
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtIssuer,
+                    ValidAudience = jwtAudience,
+                    IssuerSigningKey = signingKey,
+                    RoleClaimType = ClaimTypes.Role,
+                    NameClaimType = ClaimTypes.NameIdentifier,
+                    ClockSkew = TimeSpan.Zero // Sin margen de tiempo para expiración
                 };
 
-                var result = await userManager.CreateAsync(adminUser, adminPassword);
-
-                // Si la creación fue exitosa, le asigna el rol de "Admin"
-                if (result.Succeeded)
+                // Eventos personalizados para manejar errores de autenticación
+                options.Events = new JwtBearerEvents
                 {
-                    await userManager.AddToRoleAsync(adminUser, "Admin");
+                    // Token inválido o expirado
+                    OnAuthenticationFailed = context =>
+                    {
+                        context.NoResult();
+                        context.Response.StatusCode = 401;
+                        context.Response.ContentType = "text/plain";
+                        return context.Response.WriteAsync("Token inválido o expirado.");
+                    },
+                    // Token ausente o mal formado
+                    OnChallenge = context =>
+                    {
+                        context.HandleResponse();
+                        context.Response.StatusCode = 401;
+                        context.Response.ContentType = "application/json";
+                        return context.Response.WriteAsync("{\"error\": \"Token requerido o inválido.\"}");
+                    }
+                };
+            });
+
+            // Habilita el sistema de autorización basado en roles
+            builder.Services.AddAuthorization();
+
+            // ==========================
+            // CUSTOM SERVICES & DB
+            // ==========================
+
+            // Registra tus servicios personalizados y el contexto de dominio principal
+            builder.Services.AddDomainServices(builder.Configuration);
+
+            // Registra el contexto para autenticación (usuarios + roles)
+            builder.Services.AddDbContext<AuthenticateContext>(options =>
+            {
+                options.UseSqlServer(builder.Configuration.GetConnectionString("AuthDb"));
+            });
+
+            // Servicio para generar tokens JWT
+            builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+
+            // ==========================
+            // CORS
+            // ==========================
+
+            // Configura CORS para permitir cualquier origen (útil en frontend local o testing)
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowAll", policy =>
+                {
+                    policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+                });
+            });
+
+            // ==========================
+            // APP BUILD + MIGRACIONES
+            // ==========================
+
+            // Construye la aplicación ASP.NET Core
+            var app = builder.Build();
+
+            // Aplica política de CORS
+            app.UseCors("AllowAll");
+
+            // Ejecuta migraciones y carga de datos iniciales
+            using (var scope = app.Services.CreateScope())
+            {
+                // Aplica migraciones al contexto principal del dominio
+                var dbContext = scope.ServiceProvider.GetRequiredService<Dsw2025TpiContext>();
+                dbContext.Database.Migrate();
+                dbContext.SeedDatabase(); // Carga clientes desde JSON
+
+                // Aplica migraciones al contexto de autenticación
+                var authContext = scope.ServiceProvider.GetRequiredService<AuthenticateContext>();
+                authContext.Database.Migrate();
+
+                // Crea roles si no existen
+                var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+                var roles = builder.Configuration.GetSection("Roles").Get<List<string>>() ?? new() { "Admin", "User" };
+
+                foreach (var role in roles) // Recorre cada rol de la lista (por ejemplo: "Admin", "User")
+                {
+                    if (!await roleManager.RoleExistsAsync(role)) // Si el rol todavía no existe en la base de datos...
+                    {
+                        await roleManager.CreateAsync(new IdentityRole(role)); // ...lo crea usando Identity
+                    }
                 }
+
+
+                // Crea usuario administrador si no existe
+                var adminUsername = builder.Configuration["AdminUser:Username"];
+                var adminEmail = builder.Configuration["AdminUser:Email"];
+                var adminPassword = builder.Configuration["AdminUser:Password"];
+
+                // Verifica si ya existe un usuario con el nombre de administrador configurado
+                if (await userManager.FindByNameAsync(adminUsername) == null)
+                {
+                    // Si no existe, crea un nuevo objeto IdentityUser con los datos del admin
+                    var adminUser = new IdentityUser
+                    {
+                        UserName = adminUsername,     // Nombre de usuario del admin (por ejemplo, "admin")
+                        Email = adminEmail,           // Email del admin (por ejemplo, "admin@miapp.com")
+                        EmailConfirmed = true         // Marca el email como ya confirmado
+                    };
+
+                    // Intenta crear el usuario en la base de datos con la contraseña configurada
+                    var result = await userManager.CreateAsync(adminUser, adminPassword);
+
+                    // Si la creación fue exitosa...
+                    if (result.Succeeded)
+                    {
+                        // ...le asigna el rol "Admin" al nuevo usuario
+                        await userManager.AddToRoleAsync(adminUser, "Admin");
+                    }
+                }
+
             }
+
+            // ==========================
+            // MIDDLEWARE HTTP
+            // ==========================
+
+            // Habilita Swagger solo en entorno de desarrollo
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseSwagger();
+                app.UseSwaggerUI();
+            }
+
+            // Redirige automáticamente de HTTP a HTTPS
+            app.UseHttpsRedirection();
+
+            // Middleware global para manejo de excepciones personalizadas
+            app.UseMiddleware<CustomExceptionHandlerMiddleware>();
+
+            // Habilita autenticación JWT
+            app.UseAuthentication();
+
+            // Habilita autorización por roles
+            app.UseAuthorization();
+
+            // Mapea todos los controladores
+            app.MapControllers();
+
+            // Endpoint de verificación de salud para monitoreo
+            //app.MapHealthChecks("/healthcheck");
+
+            // Inicia la aplicación web
+            app.Run();
         }
-
-        // ==========================
-        // MIDDLEWARE
-        // ==========================
-
-        // Si el entorno es de desarrollo, habilita Swagger
-        if (app.Environment.IsDevelopment())
-        {
-            app.UseSwagger();
-            app.UseSwaggerUI();
-        }
-
-        // Redirige HTTP a HTTPS automáticamente
-        app.UseHttpsRedirection();
-
-        // Middleware global para capturar excepciones y formatearlas
-        app.UseMiddleware<CustomExceptionHandlerMiddleware>();
-
-        // Habilita autenticación JWT
-        app.UseAuthentication();
-
-        // Habilita autorización por roles
-        app.UseAuthorization();
-
-        // Mapea todos los controladores (endpoints REST)
-        app.MapControllers();
-
-        // Endpoint de health check para monitoreo
-        app.MapHealthChecks("/healthcheck");
-
-        // Inicia la aplicación
-        app.Run();
     }
 }
+

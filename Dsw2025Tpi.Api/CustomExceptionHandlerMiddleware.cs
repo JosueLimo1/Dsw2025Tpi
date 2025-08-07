@@ -9,74 +9,79 @@ namespace Dsw2025Tpi.Api.Middleware
     // Middleware personalizado para manejar excepciones globales
     public class CustomExceptionHandlerMiddleware
     {
+        // Guarda el siguiente paso en la cadena de procesamiento de la solicitud HTTP
         private readonly RequestDelegate _next;
 
-        // Constructor: recibe el "siguiente" middleware en el pipeline HTTP
+        // Constructor: recibe ese "siguiente paso" y lo guarda para usarlo más adelante
         public CustomExceptionHandlerMiddleware(RequestDelegate next)
         {
             _next = next;
         }
 
-        // Método principal que intercepta las solicitudes HTTP
+
+        // Método principal que intercepta todas las solicitudes HTTP
         public async Task InvokeAsync(HttpContext context)
         {
             try
             {
-                // Si todo va bien, continúa al siguiente middleware
+                // Intenta continuar con el siguiente middleware
                 await _next(context);
             }
             catch (Exception ex)
             {
-                // Si ocurre una excepción, se captura y se maneja de forma controlada
+                // Si ocurre una excepción, la maneja globalmente
                 await HandleExceptionAsync(context, ex);
             }
         }
 
-        // Método auxiliar que traduce las excepciones en respuestas HTTP válidas
+        // Método auxiliar que traduce las excepciones en respuestas HTTP válidas y estructuradas
         private static Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
-            // Código de estado HTTP por defecto
+            // Código de estado por defecto: error interno del servidor
             var statusCode = HttpStatusCode.InternalServerError;
 
+            // Mensaje por defecto
             var message = "Se produjo un error interno en el servidor.";
 
-            // Determinar el tipo de excepción para ajustar el mensaje y código de estado
+            // Se analiza el tipo de excepción para asignar el código HTTP adecuado
             switch (exception)
             {
                 case BadRequestException:
+                    // Error de validación de datos o reglas de negocio
                     statusCode = HttpStatusCode.BadRequest;
                     message = exception.Message;
                     break;
 
                 case EntityNotFoundException:
+                    // Recurso no encontrado
                     statusCode = HttpStatusCode.NotFound;
                     message = exception.Message;
                     break;
 
                 case DuplicatedEntityException:
-                    statusCode = HttpStatusCode.Conflict;
+                    // ❗ Por lineamiento del TPI, lo tratamos como BadRequest, no como Conflict (409)
+                    statusCode = HttpStatusCode.BadRequest;
                     message = exception.Message;
                     break;
 
-
                 default:
-                    // Para otros errores no específicos, mostramos el mensaje original
+                    // Para otros errores no previstos, se devuelve el mensaje genérico
                     message = exception.Message;
                     break;
             }
 
-            // Construimos una respuesta JSON con el mensaje y el código de estado
+            // Serializa la respuesta como JSON con el código y mensaje de error
             var result = JsonSerializer.Serialize(new
             {
                 error = message,
                 status = (int)statusCode
             });
 
-            // Configuramos la respuesta HTTP
+            // Se configura la respuesta HTTP con el código y tipo de contenido
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = (int)statusCode;
 
-            // Enviamos la respuesta
+            // Se envía la respuesta al cliente
             return context.Response.WriteAsync(result);
         }
     }
