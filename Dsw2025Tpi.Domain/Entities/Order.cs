@@ -48,7 +48,6 @@ namespace Dsw2025Tpi.Domain.Entities
             return item;
         }
 
-        // Validación: producto no nulo y activo
         private void ValidateProduct(Product product)
         {
             if (product == null)
@@ -58,14 +57,12 @@ namespace Dsw2025Tpi.Domain.Entities
                 throw new InvalidOperationException("El producto no está activo.");
         }
 
-        // Validación: cantidad positiva
         private void ValidateQuantity(int quantity)
         {
             if (quantity <= 0)
                 throw new ArgumentException("La cantidad debe ser mayor a cero.", nameof(quantity));
         }
 
-        // Validación: hay stock suficiente
         private void EnsureStockAvailability(Product product, int quantity)
         {
             if (product.StockQuantity < quantity)

@@ -8,7 +8,6 @@ namespace Dsw2025Tpi.Application.Exceptions
 {
     public class BadRequestException : ApplicationException
     {
-        // Constructor que recibe un mensaje personalizado y se lo pasa al constructor de la clase base
         public BadRequestException(string message) : base(message) { }
     }
 }

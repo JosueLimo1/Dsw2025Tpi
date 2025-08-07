@@ -39,7 +39,7 @@ namespace Dsw2025Tpi.Domain.Entities
                 _stockQuantity = value;
             }
         }
-        public void Toggle() // Sirve para activar o desactivar algo, como un interruptor.
+        public void Toggle() 
         {
             IsActive = !IsActive;
         }
