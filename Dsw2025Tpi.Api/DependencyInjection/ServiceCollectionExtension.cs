@@ -29,6 +29,10 @@ namespace Dsw2025Tpi.Api.DependencyInjection
             services.AddDbContext<Dsw2025TpiContext>(options =>
                 options.UseSqlServer(connectionString));
 
+            services.AddScoped<IAuthenticateService, AuthenticateService>();
+            services.AddHttpContextAccessor();
+
+
             // Devuelve la colección de servicios con las dependencias registradas
             return services;
         }

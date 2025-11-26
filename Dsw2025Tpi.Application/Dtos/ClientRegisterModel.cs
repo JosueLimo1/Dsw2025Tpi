@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 
 namespace Dsw2025Tpi.Application.Dtos
 {
-    public record RegisterModel(
+    public record ClientRegisterModel(
         string Username,
         string Email,
         string Password,
-        string Role,
         string Name,
         string PhoneNumber
     );
 }
+

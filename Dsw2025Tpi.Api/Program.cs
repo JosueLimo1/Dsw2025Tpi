@@ -103,9 +103,9 @@ namespace Dsw2025Tpi.Api
                 // Reglas mínimas para contraseñas
                 options.Password.RequiredLength = 6;
                 options.Password.RequireDigit = true;
-                options.Password.RequireUppercase = false;
+                options.Password.RequireUppercase = true;
                 options.Password.RequireLowercase = false;
-                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireNonAlphanumeric = true;
             })
             .AddEntityFrameworkStores<AuthenticateContext>() // Usa tu contexto de autenticación
             .AddDefaultTokenProviders(); // Habilita generación de tokens (reset pass, confirmación, etc.)
@@ -168,6 +168,9 @@ namespace Dsw2025Tpi.Api
 
             // Registra tus servicios personalizados y el contexto de dominio principal
             builder.Services.AddDomainServices(builder.Configuration);
+
+            builder.Services.AddScoped<IAuthenticateService, AuthenticateService>();
+
 
             // Registra el contexto para autenticación (usuarios + roles)
             builder.Services.AddDbContext<AuthenticateContext>(options =>
