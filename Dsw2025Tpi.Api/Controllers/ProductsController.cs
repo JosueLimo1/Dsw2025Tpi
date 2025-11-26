@@ -108,5 +108,44 @@ namespace Dsw2025Tpi.Api.Controllers
             // Devuelve 204 si tuvo éxito, o 404 si no se encontró
             return success ? NoContent() : NotFound();
         }
+
+
+        // ==============================
+        // GET /api/products/admin
+        // Endpoint exclusivo para ADMIN
+        // Permite listar productos con:
+        // - Filtrado por estado (enabled/disabled)
+        // - Búsqueda por nombre, SKU o código interno
+        // - Paginación
+        // ==============================
+
+        [HttpGet("admin")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAuthProducts([FromQuery] ProductModel.FilterProduct request)
+        {
+            // Llama al servicio para obtener los productos filtrados
+            // request puede incluir:
+            // Status  -> "enabled" / "disabled" / null
+            // Search  -> texto para buscar por nombre o SKU
+            // PageNumber y PageSize -> paginación
+            var products = await _productsService.GetProducts(request);
+
+            // Si no hay productos, se envía un header informativo al cliente
+            // Esto es útil para que el frontend pueda mostrar un mensaje personalizado
+            if (products == null || products.ProductItems.Count == 0)
+            {
+                Response.Headers.Append("X-Message", "There are no active products");
+                return NoContent(); // 204 sin cuerpo
+            }
+
+            // Devuelve la lista paginada de productos con un 200 OK
+            // El formato devuelto:
+            // {
+            //     "productItems": [...],
+            //     "total": 52
+            // }
+            return Ok(products);
+        }
+
     }
 }

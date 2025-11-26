@@ -5,6 +5,8 @@ using Dsw2025Tpi.Data; // Acceso al contexto de base de datos
 using Dsw2025Tpi.Domain.Entities; // Importa la entidad Product
 using Microsoft.EntityFrameworkCore; // Para operaciones asincrónicas con la base de datos
 using Dsw2025Tpi.Application.Validation;
+using Dsw2025Tpi.Application.Exceptions;
+
 
 namespace Dsw2025Tpi.Application.Services
 {
@@ -92,6 +94,62 @@ namespace Dsw2025Tpi.Application.Services
                 p.IsActive
             ));
         }
+
+        public async Task<ProductModel.ResponsePagination> GetProducts(ProductModel.FilterProduct request)
+        {
+            bool? isActive = request.Status?.ToLower() switch
+            {
+                "enabled" => true,
+                "disabled" => false,
+                _ => null
+            };
+
+            var query = _context.Products.AsQueryable();
+
+            // FILTRO POR ESTADO
+            if (isActive != null)
+                query = query.Where(p => p.IsActive == isActive);
+
+            // BÚSQUEDA POR NOMBRE O SKU
+            if (!string.IsNullOrWhiteSpace(request.Search))
+                query = query.Where(p =>
+                    p.Name.Contains(request.Search) ||
+                    p.Sku.Contains(request.Search) ||
+                    p.InternalCode.Contains(request.Search));
+
+            // TOTAL antes de paginar
+            int total = await query.CountAsync();
+
+            // PAGINACIÓN
+            int page = request.PageNumber ?? 1;
+            int size = request.PageSize ?? 10;
+
+            var products = await query
+                .OrderBy(p => p.Name)
+                .Skip((page - 1) * size)
+                .Take(size)
+                .ToListAsync();
+
+            // SI NO HAY RESULTADOS
+            if (!products.Any())
+                throw new NoContentException("No products were found");
+
+            return new ProductModel.ResponsePagination(
+                products.Select(p => new ProductModel.ResponseProductModel(
+                    p.Id,
+                    p.Sku,
+                    p.InternalCode,
+                    p.Name,
+                    p.Description,
+                    p.CurrentUnitPrice,
+                    p.StockQuantity,
+                    p.IsActive
+                )).ToList(),
+                total
+            );
+        }
+
+
 
         // Método que devuelve un producto específico por su ID
         public async Task<ProductModel.ResponseProductModel?> GetProductById(Guid id)

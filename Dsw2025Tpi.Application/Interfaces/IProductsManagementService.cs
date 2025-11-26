@@ -16,6 +16,10 @@ namespace Dsw2025Tpi.Application.Interfaces
         // Devuelve todos los productos registrados
         Task<IEnumerable<ProductModel.ResponseProductModel>> GetAllProducts();
 
+        // NUEVO: filtrado + paginación
+        Task<ProductModel.ResponsePagination> GetProducts(ProductModel.FilterProduct request);
+
+
         // Agrega un nuevo producto al sistema
         Task<ProductModel.ResponseProductModel> AddProduct(ProductModel.RequestProductModel request);
 
