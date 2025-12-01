@@ -223,7 +223,6 @@ namespace Dsw2025Tpi.Application.Services
                 p.IsActive
             );
         }
-
         // Método para desactivar un producto (soft delete)
         public async Task<bool> DisableProduct(Guid id)
         {
@@ -236,16 +235,35 @@ namespace Dsw2025Tpi.Application.Services
             // Marca el producto como inactivo
             p.IsActive = false;
 
-            // SI NOS PIDE BORRAR DE LA BD 
-            // _context.Products.Remove(p);
-
             // Guarda los cambios
             await _context.SaveChangesAsync();
 
-            // Devuelve true indicando éxito
+            // <--- ESTA ES LA LÍNEA QUE FALTABA
             return true;
         }
-    }
-}
 
+        // ... (resto de tus métodos anteriores: AddProduct, GetAll, Update, Disable...)
+
+        // =================================================================
+        // IMPLEMENTACIÓN DEL BORRADO FÍSICO (HARD DELETE)
+        // =================================================================
+        public async Task<bool> DeleteProduct(Guid id)
+        {
+            // 1. Buscamos el producto en la BD
+            var product = await _context.Products.FindAsync(id);
+
+            // 2. Si no existe, retornamos falso
+            if (product == null) return false;
+
+            // 3. ELIMINAMOS la entidad del contexto (Esto generará un DELETE en SQL)
+            _context.Products.Remove(product);
+
+            // 4. Guardamos los cambios
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+    } // Fin de la clase
+}
+   
 

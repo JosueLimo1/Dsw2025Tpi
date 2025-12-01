@@ -5,147 +5,98 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Dsw2025Tpi.Api.Controllers
 {
-    // Controlador que maneja las operaciones sobre productos
-    [ApiController] // Marca esta clase como controlador de API (no MVC)
-    [Route("api/[controller]")] // Ruta base: /api/products
-    [Authorize] // Requiere autenticación JWT para todos los endpoints por defecto
+    [ApiController]
+    [Route("api/[controller]")]
+    [Authorize]
     public class ProductsController : ControllerBase
     {
-        // Servicio que maneja la lógica de productos, inyectado por el contenedor
         private readonly IProductsManagementService _productsService;
-        //Usar la interfaz es como decir “dame un control remoto,
-        //no me importa cómo es el televisor por dentro”.
-        // Esto permite que el controlador no dependa de una implementación concreta,
 
-        // Constructor: recibe el servicio mediante inyección de dependencias
         public ProductsController(IProductsManagementService productsService)
         {
             _productsService = productsService;
         }
 
-        // ============================
-        // POST /api/products
-        // Crea un nuevo producto (solo Admin)
-        // ============================
+        // POST: api/products (Crear)
         [HttpPost]
-        [Authorize(Roles = "Admin")] // Solo los usuarios con rol Admin pueden crear productos
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create([FromBody] ProductModel.RequestProductModel model)
         {
-            // Se delega completamente al servicio; si hay error, el middleware lo manejará
             var created = await _productsService.AddProduct(model);
-
-            // Devuelve 201 Created con la URL del nuevo producto
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
 
-        // ============================
-        // GET /api/products
-        // Devuelve todos los productos activos
-        // ============================
+        // GET: api/products (Listar activos - Público)
         [HttpGet]
-        [AllowAnonymous] // Este endpoint es público: no requiere autenticación
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
-            // Se obtiene la lista completa de productos
             var products = await _productsService.GetAllProducts();
-
-            // Se filtran los productos activos solamente
             var active = products?.Where(p => p.IsActive).ToList();
 
-            // Si no hay productos activos, devolver 204 No Content
             if (active == null || !active.Any())
                 return NoContent();
 
-            // Devuelve 200 OK con la lista de productos activos
             return Ok(active);
         }
 
-        // ============================
-        // GET /api/products/{id}
-        // Devuelve un producto por su ID
-        // ============================
+        // GET: api/products/{id} (Obtener uno)
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin")] // Admins y Users pueden ver un producto por ID
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            // Se busca el producto por su ID
             var product = await _productsService.GetProductById(id);
-
-            // Si no existe o está inactivo, devuelve 404 Not Found
-            if (product == null || !product.IsActive)
-                return NotFound();
-
-            // Devuelve 200 OK con el producto encontrado
+            if (product == null || !product.IsActive) return NotFound();
             return Ok(product);
         }
 
-        // ============================
-        // PUT /api/products/{id}
-        // Actualiza un producto existente (solo Admin)
-        // ============================
+        // PUT: api/products/{id} (Actualizar)
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin")] // Solo los administradores pueden editar productos
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Update(Guid id, [FromBody] ProductModel.RequestProductModel model)
         {
-            // Llama al servicio para actualizar el producto
             var updated = await _productsService.UpdateProduct(id, model);
-
-            // Si el producto no existe, devuelve 404 Not Found
             return updated == null ? NotFound() : Ok(updated);
         }
 
-        // ============================
-        // PATCH /api/products/{id}
-        // Desactiva un producto (soft delete)
-        // ============================
+        // ================================================================
+        // DELETE: api/products/{id}
+        // ================================================================
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            // CAMBIO: Ahora llamamos a DeleteProduct (Borrado Físico)
+            var success = await _productsService.DeleteProduct(id);
+
+            // Si tuvo éxito, devolvemos 204 No Content
+            // Si no encontró el ID, devolvemos 404 NotFound
+            return success ? NoContent() : NotFound("Producto no encontrado.");
+        }
+
+        // PATCH: api/products/{id} (Desactivar - Endpoint alternativo)
         [HttpPatch("{id}")]
-        [Authorize(Roles = "Admin")] // Solo Admin puede deshabilitar productos
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Disable(Guid id)
         {
-            // Intenta deshabilitar el producto
             var success = await _productsService.DisableProduct(id);
-
-            // Devuelve 204 si tuvo éxito, o 404 si no se encontró
             return success ? NoContent() : NotFound();
         }
 
-
-        // ==============================
-        // GET /api/products/admin
-        // Endpoint exclusivo para ADMIN
-        // Permite listar productos con:
-        // - Filtrado por estado (enabled/disabled)
-        // - Búsqueda por nombre, SKU o código interno
-        // - Paginación
-        // ==============================
-
+        // GET: api/products/admin (Listado avanzado paginado)
         [HttpGet("admin")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAuthProducts([FromQuery] ProductModel.FilterProduct request)
         {
-            // Llama al servicio para obtener los productos filtrados
-            // request puede incluir:
-            // Status  -> "enabled" / "disabled" / null
-            // Search  -> texto para buscar por nombre o SKU
-            // PageNumber y PageSize -> paginación
             var products = await _productsService.GetProducts(request);
 
-            // Si no hay productos, se envía un header informativo al cliente
-            // Esto es útil para que el frontend pueda mostrar un mensaje personalizado
             if (products == null || products.ProductItems.Count == 0)
             {
                 Response.Headers.Append("X-Message", "There are no active products");
-                return NoContent(); // 204 sin cuerpo
+                return NoContent();
             }
 
-            // Devuelve la lista paginada de productos con un 200 OK
-            // El formato devuelto:
-            // {
-            //     "productItems": [...],
-            //     "total": 52
-            // }
             return Ok(products);
         }
-
     }
 }
