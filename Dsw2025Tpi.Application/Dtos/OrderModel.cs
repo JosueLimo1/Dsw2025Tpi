@@ -11,7 +11,7 @@ namespace Dsw2025Tpi.Application.Dtos
     {
         public record RequestOrderModel(Guid CustomerId, string? ShippingAddress, string? BillingAddress, List<OrderItemModel.RequestOrderItemModel> OrderItems);
         //public record OrderItemRequest(Guid ProductId, int Quantity);
-        public record ResponseOrderModel(Guid Id, DateTime Date, string? ShippingAddress, string? BillingAddress, string? Notes, Guid CustomerId, OrderStatus Status);
+        public record ResponseOrderModel(Guid Id, DateTime Date, string? ShippingAddress, string? BillingAddress, string? Notes, decimal TotalAmount, Guid CustomerId, string? CustomerName,OrderStatus Status, List<OrderItemModel.ResponseOrderItemModel> OrderItems);
     
     }
 }
