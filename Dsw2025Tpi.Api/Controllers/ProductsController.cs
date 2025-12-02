@@ -40,13 +40,19 @@ namespace Dsw2025Tpi.Api.Controllers
             return Ok(active);
         }
 
+      
         // GET: api/products/{id} (Obtener uno)
         [HttpGet("{id}")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var product = await _productsService.GetProductById(id);
-            if (product == null || !product.IsActive) return NotFound();
+
+            // CORRECCIÓN: Solo devolvemos NotFound si es null. 
+            // Si existe pero está inactivo, el Admin TIENE que poder verlo.
+            if (product == null)
+                return NotFound();
+
             return Ok(product);
         }
 
